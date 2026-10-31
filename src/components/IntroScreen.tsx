@@ -30,6 +30,7 @@ export default function IntroScreen({ game, onBegin }: { game: Game; onBegin: ()
     ['고객 1명당 월 매출', `${sim.arpu.toLocaleString('ko-KR')}만원`],
     ['매출 대비 원가율', `${Math.round(sim.cogsRatio * 100)}%`],
     ['월 이탈률(기본)', `${(sim.churnRate * 100).toFixed(1)}%`],
+    ['AI가 대신할 수 있는 업무(상한)', `${Math.round((sim.aiShare ?? 0.3) * 100)}% · 도입하면 같은 인원으로 더 많은 고객을 받습니다`],
     ['처리 가능한 고객 수', `${formatNumber(sim.headcount * sim.capPerHead)}명 (현재 가동률 ${Math.round(utilization(sim) * 100)}%)`],
     ['시작 런웨이', runway === null ? '흑자 구조' : `약 ${runway.toFixed(1)}개월 (지금 속도로 쓸 때)`],
   ];

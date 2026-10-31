@@ -43,8 +43,14 @@ export function scaleMoney(s: Pick<SimState, 'scale'>, amount: number): number {
 }
 
 // ---------- 파생 값 ----------
+export const DEFAULT_AI_SHARE = 0.3;
+/** AI가 실제로 대신하는 업무 비율 = 업종 상한 × 도입 정도 */
+export function aiAutomated(s: SimState): number {
+  return clamp((s.aiShare ?? DEFAULT_AI_SHARE) * (s.aiLevel ?? 0), 0, 0.9);
+}
+/** 처리 가능한 고객 수. 사람 1명의 처리량을 AI가 대신하는 비율만큼 늘려 준다. */
 export function capacity(s: SimState): number {
-  return Math.max(1, s.headcount * s.capPerHead);
+  return Math.max(1, (s.headcount * s.capPerHead) / (1 - aiAutomated(s)));
 }
 export function utilization(s: SimState): number {
   return s.customers / capacity(s);
@@ -97,6 +103,10 @@ export function metricValue(s: SimState, metric: CondMetric): number {
     }
     case 'monthlyProfit':
       return projectedMonthlyProfit(s) / scaleOf(s);
+    case 'aiShare':
+      return s.aiShare ?? DEFAULT_AI_SHARE;
+    case 'aiLevel':
+      return s.aiLevel ?? 0;
     case 'cash':
     case 'monthlyRevenue':
     case 'customers':
@@ -270,6 +280,7 @@ export function applyEffects(s: SimState, e: Effects): SimState {
     acqBase: Math.round(s.acqBase * (1 + (e.acqBasePct ?? 0)) * 100) / 100,
     cogsRatio: clamp(s.cogsRatio + (e.cogsRatio ?? 0), 0, 0.95),
     capPerHead: Math.max(1, Math.round(s.capPerHead * (1 + (e.capPerHeadPct ?? 0)))),
+    aiLevel: clamp((s.aiLevel ?? 0) + (e.aiLevel ?? 0), 0, 1),
     debt: Math.max(0, s.debt + scaleMoney(s, e.debt ?? 0)),
     dilution: clamp(s.dilution + (e.dilution ?? 0), 0, 90),
     flags,

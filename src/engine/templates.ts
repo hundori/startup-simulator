@@ -18,6 +18,7 @@ export interface BusinessTemplate {
   cogsRatio: number; // 매출원가율
   overhead: number; // 월 고정 운영비(임대·서버·사무 등)
   capPerHead: number; // 직원 1명이 감당하는 고객 수
+  aiShare: number; // AI가 대신할 수 있는 업무 비율의 상한(교육용 가정, 2026년 기준)
   churnRate: number; // 월 이탈률
   acqBase: number; // 월 기본 신규 고객
   initCustomers: number;
@@ -34,6 +35,7 @@ export const BUSINESS_TYPES: Record<BusinessType, BusinessTemplate> = {
     cogsRatio: 0.15,
     overhead: 150,
     capPerHead: 400,
+    aiShare: 0.6, // 고객 문의·문서·테스트 등 디지털 업무가 대부분
     churnRate: 0.05,
     acqBase: 17,
     initCustomers: 40,
@@ -48,6 +50,7 @@ export const BUSINESS_TYPES: Record<BusinessType, BusinessTemplate> = {
     cogsRatio: 0.45,
     overhead: 200,
     capPerHead: 500,
+    aiShare: 0.35, // 상담·상품 등록·광고는 가능, 소싱·포장·배송은 사람
     churnRate: 0.1,
     acqBase: 28,
     initCustomers: 70,
@@ -62,6 +65,7 @@ export const BUSINESS_TYPES: Record<BusinessType, BusinessTemplate> = {
     cogsRatio: 0.3,
     overhead: 500,
     capPerHead: 150,
+    aiShare: 0.15, // 예약·문의 응대 정도. 시술·서비스는 사람
     churnRate: 0.08,
     acqBase: 18,
     initCustomers: 70,
@@ -76,6 +80,7 @@ export const BUSINESS_TYPES: Record<BusinessType, BusinessTemplate> = {
     cogsRatio: 0.2,
     overhead: 120,
     capPerHead: 300,
+    aiShare: 0.5, // 초안 제작·편집·운영 보조. 기획과 신뢰는 사람
     churnRate: 0.07,
     acqBase: 19,
     initCustomers: 50,
@@ -90,6 +95,7 @@ export const BUSINESS_TYPES: Record<BusinessType, BusinessTemplate> = {
     cogsRatio: 0.1,
     overhead: 250,
     capPerHead: 1500,
+    aiShare: 0.45, // 문의·검수·추천은 가능, 입점사 영업·분쟁은 사람
     churnRate: 0.07,
     acqBase: 50,
     initCustomers: 120,
@@ -236,6 +242,8 @@ export function createInitialState(setup: SetupInput): SimState {
     churnRate: clamp(t.churnRate * rm.churnMult * ct.churnMult, 0.01, 0.5),
     acqBase: Math.round(t.acqBase * rm.acqMult * ct.acqMult * k * 100) / 100,
     capPerHead: Math.round(t.capPerHead * ct.capMult),
+    aiShare: t.aiShare,
+    aiLevel: 0,
     debt: 0,
     dilution: 0,
     insolvencyMonths: 0,

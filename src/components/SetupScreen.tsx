@@ -108,7 +108,7 @@ export default function SetupScreen({
               title={BUSINESS_TYPES[k].label}
             >
               <span className="block text-sm text-muted">
-                {BUSINESS_TYPES[k].description} · {BUSINESS_TYPES[k].examples}
+                {BUSINESS_TYPES[k].description} · {BUSINESS_TYPES[k].examples} · AI 대체 상한 약 {Math.round(BUSINESS_TYPES[k].aiShare * 100)}%
               </span>
             </Choice>
           ))}

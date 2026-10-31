@@ -6,6 +6,7 @@ import {
   formatNumber,
   formatSigned,
   formatSignedMoney,
+  aiAutomated,
   monthlyInterest,
   payroll,
   previewRunway,
@@ -258,6 +259,9 @@ export default function StatusPanel({ game, previewCost = null }: { game: Game; 
             인력 {sim.headcount}명 · 월 고정비 {formatMoney(fixed)}
           </p>
           <p className="num">가동률 {Math.round(util * 100)}%</p>
+          <p className="num">
+            AI가 맡은 업무 {Math.round(aiAutomated(sim) * 100)}% (업종 상한 {Math.round((sim.aiShare ?? 0.3) * 100)}%)
+          </p>
           <div className="flex flex-wrap gap-1.5 pt-1">
             {util > 1 ? <Badge tone="warn">인력 부족</Badge> : null}
             {sim.cash < 0 ? <Badge tone="danger">현금 마이너스 {sim.insolvencyMonths}개월째 · 2개월 연속이면 파산</Badge> : null}

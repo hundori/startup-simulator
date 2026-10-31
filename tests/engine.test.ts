@@ -517,3 +517,24 @@ describe('런웨이 미리보기·전문가 조언', () => {
     }
   });
 });
+
+import { aiAutomated, capacity as capacityOf, applyEffects as applyFx, BUSINESS_TYPES as BT } from '../src/engine';
+
+describe('AI 자동화 비율', () => {
+  it('업종별 상한이 다르고 소프트웨어가 가장 높고 오프라인이 가장 낮다', () => {
+    const v = (k: keyof typeof BT) => BT[k].aiShare;
+    expect(v('saas')).toBeGreaterThan(v('content'));
+    expect(v('content')).toBeGreaterThan(v('platform'));
+    expect(v('platform')).toBeGreaterThan(v('commerce'));
+    expect(v('commerce')).toBeGreaterThan(v('offline'));
+  });
+  it('AI 도입은 처리 가능 고객 수를 업종 상한까지만 늘린다', () => {
+    const base = baseSim({ businessType: 'saas', aiShare: 0.6, aiLevel: 0 });
+    const full = applyFx(base, { aiLevel: 5 });
+    expect(full.aiLevel).toBe(1);
+    expect(aiAutomated(full)).toBeCloseTo(0.6);
+    expect(capacityOf(full) / capacityOf(base)).toBeCloseTo(2.5, 1);
+    const offline = applyFx(baseSim({ businessType: 'offline', aiShare: 0.15, aiLevel: 0 }), { aiLevel: 1 });
+    expect(capacityOf(offline) / capacityOf(baseSim({ businessType: 'offline', aiShare: 0.15 }))).toBeLessThan(1.2);
+  });
+});

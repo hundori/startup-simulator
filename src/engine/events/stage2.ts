@@ -183,11 +183,18 @@ export const STAGE2_EVENTS: GameEvent[] = [
       { when: [lte('headcount', 2)], add: 1 },
     ],
     situation:
-      '고객이 늘면서 {company}의 업무가 한계에 가까워졌습니다. 지금 인원으로는 응대와 개발을 동시에 감당하기 어렵습니다. 채용을 서두르면 비용이 늘고, 늦추면 지금 있는 팀이 지칩니다.',
+      '고객이 늘면서 {company}의 업무가 한계에 가까워졌습니다. 지금 인원으로는 응대와 개발을 동시에 감당하기 어렵습니다. 사람을 뽑을지, AI 에이전트에게 맡길 수 있는 일부터 맡길지 정해야 합니다.',
+    contextByType: {
+      saas: '이 업종은 문의 응대·문서·테스트 같은 업무의 약 60%까지 AI가 대신할 수 있다고 가정합니다(수업용 가정).',
+      commerce: '이 업종은 상담·상품 등록·광고 업무의 약 35%까지 AI가 대신할 수 있다고 가정합니다. 소싱·포장·배송은 사람이 합니다.',
+      offline: '이 업종은 예약·문의 응대 정도인 약 15%만 AI가 대신할 수 있다고 가정합니다. 서비스 제공은 사람이 합니다.',
+      content: '이 업종은 초안·편집·운영 보조의 약 50%까지 AI가 대신할 수 있다고 가정합니다. 기획과 신뢰는 사람이 만듭니다.',
+      platform: '이 업종은 문의·검수·추천의 약 45%까지 AI가 대신할 수 있다고 가정합니다. 입점사 영업과 분쟁 조정은 사람이 합니다.',
+    },
     discussionPrompts: [
       '지금 부족한 것은 "사람 수"인가 "특정 역량"인가?',
-      '채용하지 않고 해결할 수 있는 병목은 무엇인가?',
-      '새로 오는 사람이 기존 팀 문화에 어떤 영향을 줄까?',
+      '우리 업무 중 AI가 사람보다 낫거나 같게 할 수 있는 것은 몇 %이고, 반드시 사람이 해야 하는 일은 무엇인가?',
+      'AI가 실수했을 때 책임지는 사람과 되돌리는 절차가 있는가?',
     ],
     options: [
       {
@@ -211,14 +218,45 @@ export const STAGE2_EVENTS: GameEvent[] = [
       },
       {
         id: 'hire-and-automate',
-        label: '1명 채용 + 업무 자동화·도구 도입',
-        description: '사람과 도구를 같이 늘려 1인당 처리량을 높인다.',
+        label: '1명 채용 + AI 에이전트를 단순·반복 업무에 도입',
+        description: '핵심 사람 1명을 뽑고, 반복 문의·문서 같은 일부터 AI에게 맡긴다. 도입 비용과 월 이용료가 든다.',
         cost: 500,
         outcomes: [
           {
-            effects: { headcount: 1, quality: 3, capPerHeadPct: 0.15, morale: 3, flags: ['hired', 'automation'] },
-            text: '사람과 도구를 같이 늘려 같은 인원으로 처리할 수 있는 고객 수가 늘었습니다.',
+            when: [gte('aiShare', 0.3)],
+            effects: { headcount: 1, quality: 3, aiLevel: 0.3, overhead: 40, morale: 3, flags: ['hired', 'automation'] },
+            text: '사람은 판단이 필요한 일에, AI는 반복 업무에 쓰면서 같은 인원으로 처리할 수 있는 고객 수가 늘었습니다. AI 이용료로 월 고정비가 조금 늘었습니다.',
             verdict: 'strong',
+          },
+          {
+            effects: { headcount: 1, quality: 2, aiLevel: 0.1, overhead: 30, morale: 1, flags: ['hired', 'automation'] },
+            text: '이 업종은 AI가 맡을 수 있는 일이 적어 도입 효과가 작았습니다. 채용한 1명이 실제 병목을 풀었습니다.',
+            verdict: 'ok',
+          },
+        ],
+      },
+      {
+        id: 'ai-first',
+        label: 'AI 에이전트를 먼저 전면 도입하고 채용은 보류',
+        description: '고객 응대·반복 업무를 AI 에이전트 중심으로 바꾼다. 사람을 늘리지 않아 인건비는 그대로지만 도입 비용·월 이용료와 품질 관리 부담이 생긴다.',
+        cost: 400,
+        outcomes: [
+          {
+            when: [gte('aiShare', 0.5), gte('quality', 50)],
+            effects: { aiLevel: 0.7, overhead: 100, quality: 1, morale: -2, churnRate: 0.004, flags: ['ai-first'] },
+            text: 'AI가 응대와 반복 업무 대부분을 맡아 같은 인원으로 훨씬 많은 고객을 받을 수 있게 됐습니다. 다만 복잡한 문의에서 오답이 나와 일부 고객이 이탈했고, 팀은 검수 업무가 늘었습니다.',
+            verdict: 'strong',
+          },
+          {
+            when: [gte('aiShare', 0.3)],
+            effects: { aiLevel: 0.5, overhead: 80, quality: -3, reputation: -2, morale: -3, flags: ['ai-first'] },
+            text: '일부 업무는 줄었지만 품질 기준이 흔들렸고, AI 답변에 불만을 느낀 고객이 늘었습니다. 사람이 마지막에 확인하는 절차가 부족했습니다.',
+            verdict: 'ok',
+          },
+          {
+            effects: { aiLevel: 0.3, overhead: 70, quality: -6, reputation: -5, morale: -4, churnRate: 0.01, flags: ['ai-first'] },
+            text: '이 업종의 핵심 업무는 사람이 해야 하는데 AI에 맡기는 범위가 너무 넓었습니다. 서비스 품질이 눈에 띄게 떨어지고 평판이 나빠졌습니다.',
+            verdict: 'weak',
           },
         ],
       },
