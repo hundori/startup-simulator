@@ -2,6 +2,7 @@
 
 import type { Game } from '@/engine';
 import SubmitPanel from './SubmitPanel';
+import AdvisorPicker from './AdvisorPicker';
 import { DISCLAIMER_LONG, generateReport, monthToLabel, reportToMarkdown } from '@/engine';
 import TrendCharts from './TrendCharts';
 import { Badge, Button, Callout, VERDICT_LABEL } from './ui';
@@ -117,6 +118,8 @@ export default function FinalReport({ game, onRestart }: { game: Game; onRestart
           <span className="num">{report.discussion.withDissent}</span>건 — {report.discussion.shortLabel}
         </p>
       </section>
+
+      <AdvisorPicker game={game} />
 
       <SubmitPanel game={game} />
 

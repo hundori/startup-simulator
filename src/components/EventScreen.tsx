@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import type { Game, ResolvedEvent } from '@/engine';
 import { MIN_RATIONALE_LENGTH, formatMoney, reasonLabel, shortIdea } from '@/engine';
 import Choice from './Choice';
@@ -46,10 +46,12 @@ export default function EventScreen({
   game,
   event,
   onSubmit,
+  onPreview,
 }: {
   game: Game;
   event: ResolvedEvent;
   onSubmit: (optionId: string, rationale: string, dissent: string) => string | null;
+  onPreview?: (cost: number | null) => void;
 }) {
   const key = draftKey(game.id, event.id);
   const [draft, setDraft] = useState<Draft>(() => {
@@ -71,6 +73,12 @@ export default function EventScreen({
       return next;
     });
   };
+
+  const selectedCost = event.options.find((o) => o.id === draft.optionId)?.cost ?? null;
+  useEffect(() => {
+    onPreview?.(selectedCost);
+    return () => onPreview?.(null);
+  }, [selectedCost, onPreview]);
 
   const len = draft.rationale.trim().length;
   const enough = len >= MIN_RATIONALE_LENGTH;

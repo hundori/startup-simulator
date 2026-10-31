@@ -313,3 +313,11 @@ export function monthsAllocation(eventCount: number): number[] {
     return base + extra;
   });
 }
+
+/** 대안을 고르면 즉시 나가는 비용만 반영한 런웨이 추정. 채용·매출 변화 같은 결과는 결정 전에는 알 수 없으므로 넣지 않는다. */
+export function previewRunway(s: SimState, cost: number): { cashAfter: number; months: number | null } {
+  const cashAfter = s.cash - cost;
+  if (cashAfter <= 0) return { cashAfter, months: 0 };
+  const profit = projectedMonthlyProfit(s);
+  return { cashAfter, months: profit >= 0 ? null : cashAfter / -profit };
+}

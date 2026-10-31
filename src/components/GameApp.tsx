@@ -52,6 +52,7 @@ export default function GameApp() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [started, setStarted] = useState(false);
   const [teacher, setTeacher] = useState(false);
+  const [previewCost, setPreviewCost] = useState<number | null>(null);
   // 교수자 취합 화면은 주소 끝에 #teacher 를 붙여 연다 (메뉴에는 노출하지 않음)
   useEffect(() => {
     const f = () => setTeacher(window.location.hash === '#teacher');
@@ -113,7 +114,7 @@ export default function GameApp() {
   } else if (game.phase === 'intro') {
     body = <IntroScreen game={game} onBegin={() => commit(beginSimulation(game))} />;
   } else if (game.phase === 'event' && event) {
-    body = <EventScreen key={`${game.id}:${event.id}`} game={game} event={event} onSubmit={onSubmit} />;
+    body = <EventScreen key={`${game.id}:${event.id}`} game={game} event={event} onSubmit={onSubmit} onPreview={setPreviewCost} />;
   } else if (game.phase === 'outcome') {
     body = (
       <OutcomeScreen
@@ -189,7 +190,7 @@ export default function GameApp() {
             <div className="order-2 min-w-0 lg:order-1">{body}</div>
             <div className="order-1 lg:order-2">
               <div className="lg:sticky lg:top-6">
-                <StatusPanel game={game} />
+                <StatusPanel game={game} previewCost={game.phase === 'event' ? previewCost : null} />
               </div>
             </div>
           </div>

@@ -492,3 +492,28 @@ describe('조사·제출 코드', () => {
     expect(submissionsToCsv([back!]).startsWith('﻿')).toBe(true);
   });
 });
+
+import { previewRunway, computeRunway, ADVISORS, adviceFor } from '../src/engine';
+import { play as playGame, firstAvailable as pick } from './helpers';
+
+describe('런웨이 미리보기·전문가 조언', () => {
+  it('비용이 클수록 예상 런웨이가 짧아진다', () => {
+    const g = newGame();
+    const now = computeRunway(g.sim);
+    const a = previewRunway(g.sim, 0);
+    const b = previewRunway(g.sim, Math.round(g.sim.cash * 0.6));
+    expect(a.cashAfter).toBeGreaterThan(b.cashAfter);
+    if (now !== null) expect(b.months as number).toBeLessThan(a.months as number);
+    expect(previewRunway(g.sim, g.sim.cash + 1).months).toBe(0);
+  });
+  it('전문가 4명 모두 같은 게임에 같은 조언을 낸다', () => {
+    const g = playGame({}, pick);
+    expect(ADVISORS).toHaveLength(4);
+    for (const a of ADVISORS) {
+      const x = adviceFor(g, a.id);
+      expect(x.paragraphs.length).toBeGreaterThanOrEqual(3);
+      expect(x.actions).toHaveLength(3);
+      expect(JSON.stringify(adviceFor(g, a.id))).toBe(JSON.stringify(x));
+    }
+  });
+});

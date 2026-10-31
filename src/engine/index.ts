@@ -11,3 +11,4 @@ export * from './rng';
 export { ALL_EVENTS, EVENT_MAP, getEvent, stageCandidates } from './events';
 export * from './josa';
 export * from './submission';
+export * from './advisors';

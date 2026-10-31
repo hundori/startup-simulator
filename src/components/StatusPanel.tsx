@@ -8,6 +8,7 @@ import {
   formatSignedMoney,
   monthlyInterest,
   payroll,
+  previewRunway,
   utilization,
 } from '@/engine';
 import { Badge } from './ui';
@@ -29,6 +30,45 @@ function Runway({ game }: { game: Game }) {
     <span className={`num font-semibold ${tone}`}>
       런웨이 {r < 1 ? '1개월 미만' : `약 ${r.toFixed(1)}개월`}
     </span>
+  );
+}
+
+function fmtMonths(m: number | null): string {
+  if (m === null) return '흑자 유지';
+  if (m < 1) return '1개월 미만';
+  return `약 ${m.toFixed(1)}개월`;
+}
+
+/** 고른 대안의 비용만 반영한 런웨이. 채용·매출 변화 같은 결과는 결정 전에는 보여 주지 않는다. */
+function RunwayPreview({ game, cost }: { game: Game; cost: number }) {
+  const now = computeRunway(game.sim);
+  const after = previewRunway(game.sim, cost);
+  const danger = after.months !== null && after.months < 3;
+  const caution = after.months !== null && after.months >= 3 && after.months < 6;
+  return (
+    <div
+      role="status"
+      aria-live="polite"
+      className={`border-b border-line px-4 py-3 text-sm ${danger ? 'bg-loss-soft' : caution ? 'bg-warn-soft' : 'bg-accent-soft'}`}
+    >
+      <p className="text-xs font-semibold text-muted">이 선택 시 예상 런웨이</p>
+      <p className="num mt-0.5 font-semibold">
+        {fmtMonths(now)} → <span className={danger ? 'text-loss' : caution ? 'text-warn' : 'text-ink'}>{fmtMonths(after.months)}</span>
+      </p>
+      <p className="num mt-0.5 text-xs text-muted">
+        현금 {formatMoney(game.sim.cash)} → {formatMoney(after.cashAfter)} ({cost > 0 ? `비용 ${formatMoney(cost)}` : "추가 비용 없음"})
+      </p>
+      {danger ? (
+        <div className="mt-2">
+          <Badge tone="danger">경고 · 런웨이 3개월 미만</Badge>
+        </div>
+      ) : caution ? (
+        <div className="mt-2">
+          <Badge tone="warn">주의 · 런웨이 6개월 미만</Badge>
+        </div>
+      ) : null}
+      <p className="mt-2 text-xs text-muted">비용만 반영한 추정입니다. 채용·매출 변화 같은 결과는 결정 후 공개됩니다.</p>
+    </div>
   );
 }
 
@@ -112,7 +152,7 @@ function deltaClass(v: number): string {
   return 'text-muted';
 }
 
-export default function StatusPanel({ game }: { game: Game }) {
+export default function StatusPanel({ game, previewCost = null }: { game: Game; previewCost?: number | null }) {
   const { sim } = game;
   const prev: MetricSnapshot | null = game.decisions.length
     ? game.decisions[game.decisions.length - 1].before
@@ -188,6 +228,7 @@ export default function StatusPanel({ game }: { game: Game }) {
           <h2 className="font-sans text-sm font-bold">경영 현황</h2>
           <Runway game={game} />
         </div>
+        {previewCost !== null ? <RunwayPreview game={game} cost={previewCost} /> : null}
 
         <dl className="grid grid-cols-2 divide-x divide-y divide-line border-b border-line lg:grid-cols-1 lg:divide-x-0">
           {items.map((it) => (
