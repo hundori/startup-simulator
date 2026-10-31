@@ -1,7 +1,7 @@
-import jobs from '@/assets/advisors/jobs.jpg';
-import musk from '@/assets/advisors/musk.jpg';
-import zuckerberg from '@/assets/advisors/zuckerberg.jpg';
-import bezos from '@/assets/advisors/bezos.jpg';
+import jobs from '@/assets/advisors/jobs.png';
+import musk from '@/assets/advisors/musk.png';
+import zuckerberg from '@/assets/advisors/zuckerberg.png';
+import bezos from '@/assets/advisors/bezos.png';
 import type { AdvisorId } from '@/engine';
 
 // Next 빌드는 {src} 객체를, 단일 파일 번들(esbuild dataurl)은 문자열을 돌려준다.

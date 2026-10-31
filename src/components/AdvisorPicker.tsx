@@ -8,7 +8,7 @@ import { ADVISOR_PHOTOS } from './advisorPhotos';
 
 function Avatar({ id, name }: { id: AdvisorId; name: string }) {
   // eslint-disable-next-line @next/next/no-img-element
-  return <img src={ADVISOR_PHOTOS[id]} alt={`${name} 사진`} className="h-24 w-24 rounded-md object-cover" />;
+  return <img src={ADVISOR_PHOTOS[id]} alt={`${name} 사진`} className="h-24 w-24 rounded-full border border-line object-cover" />;
 }
 
 export default function AdvisorPicker({ game }: { game: Game }) {
