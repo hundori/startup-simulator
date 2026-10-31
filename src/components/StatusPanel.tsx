@@ -1,0 +1,226 @@
+import type { Game, MetricSnapshot } from '@/engine';
+import {
+  BUSINESS_TYPES,
+  computeRunway,
+  formatMoney,
+  formatNumber,
+  formatSigned,
+  formatSignedMoney,
+  monthlyInterest,
+  payroll,
+  utilization,
+} from '@/engine';
+import { Badge } from './ui';
+
+const YEARS = [
+  { n: 1, label: '1년 차 · 생존' },
+  { n: 2, label: '2년 차 · 성장' },
+  { n: 3, label: '3년 차 · 확장' },
+];
+
+function Runway({ game }: { game: Game }) {
+  const r = computeRunway(game.sim);
+  if (game.sim.cash <= 0) {
+    return <span className="font-semibold text-loss">현금이 바닥났습니다</span>;
+  }
+  if (r === null) return <span className="font-semibold text-gain">흑자 운영 중</span>;
+  const tone = r < 3 ? 'text-loss' : r < 6 ? 'text-warn' : 'text-ink';
+  return (
+    <span className={`num font-semibold ${tone}`}>
+      런웨이 {r < 1 ? '1개월 미만' : `약 ${r.toFixed(1)}개월`}
+    </span>
+  );
+}
+
+/** 36개월을 한 칸씩 보여 주는 타임라인. 지난 달은 현금 증감으로 색을 칠한다. */
+function TimeStrip({ game }: { game: Game }) {
+  const { sim, history, decisions } = game;
+  const decisionMonths = new Set(decisions.map((d) => d.month));
+  const negativeMonths = history.filter((h) => h.month > 0 && h.cash < 0).length;
+
+  const cellClass = (m: number): string => {
+    if (m > sim.month) return 'border border-line bg-transparent';
+    const cur = history.find((h) => h.month === m);
+    const prev = history.find((h) => h.month === m - 1);
+    if (!cur || !prev) return 'bg-line';
+    if (cur.cash < 0) return 'bg-loss';
+    return cur.cash >= prev.cash ? 'bg-gain' : 'bg-warn/40';
+  };
+
+  return (
+    <div
+      role="img"
+      aria-label={`36개월 중 ${sim.month}개월 경과, 현금이 마이너스였던 달 ${negativeMonths}개월, 결정 ${decisions.length}회`}
+    >
+      <div className="grid gap-3 sm:grid-cols-3">
+        {YEARS.map((y) => (
+          <div key={y.n}>
+            <p className="mb-1 text-xs text-muted">{y.label}</p>
+            <div className="grid grid-cols-12 gap-[3px]" aria-hidden="true">
+              {Array.from({ length: 12 }, (_, i) => {
+                const m = (y.n - 1) * 12 + i + 1;
+                return (
+                  <span
+                    key={m}
+                    className={`relative grid aspect-square place-items-center rounded-[3px] ${cellClass(m)} ${
+                      m === sim.month ? 'outline outline-2 outline-offset-1 outline-accent' : ''
+                    }`}
+                  >
+                    {decisionMonths.has(m - 1) && m <= sim.month ? (
+                      <span className="h-1.5 w-1.5 rounded-full bg-white ring-1 ring-ink" />
+                    ) : null}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
+      <p className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs text-muted">
+        <span>
+          <i className="mr-1 inline-block h-2 w-2 rounded-[2px] bg-gain align-baseline" />
+          현금 증가
+        </span>
+        <span>
+          <i className="mr-1 inline-block h-2 w-2 rounded-[2px] bg-warn/40 align-baseline" />
+          현금 감소
+        </span>
+        <span>
+          <i className="mr-1 inline-block h-2 w-2 rounded-[2px] bg-loss align-baseline" />
+          현금 마이너스
+        </span>
+        <span>
+          <i className="mr-1 inline-block h-2 w-2 rounded-full bg-white align-baseline ring-1 ring-ink" />
+          결정한 달
+        </span>
+      </p>
+    </div>
+  );
+}
+
+function bar(value: number) {
+  return (
+    <div className="mt-1.5 h-1 w-full overflow-hidden rounded bg-line" aria-hidden="true">
+      <div className="h-full bg-accent" style={{ width: `${Math.max(0, Math.min(100, value))}%` }} />
+    </div>
+  );
+}
+
+function deltaClass(v: number): string {
+  if (v > 0) return 'text-gain';
+  if (v < 0) return 'text-loss';
+  return 'text-muted';
+}
+
+export default function StatusPanel({ game }: { game: Game }) {
+  const { sim } = game;
+  const prev: MetricSnapshot | null = game.decisions.length
+    ? game.decisions[game.decisions.length - 1].before
+    : null;
+  const t = BUSINESS_TYPES[game.setup.businessType];
+  const util = utilization(sim);
+  const fixed = payroll(sim) + sim.overhead + sim.marketingBudget + monthlyInterest(sim);
+
+  const items: {
+    key: string;
+    label: string;
+    value: string;
+    unit?: string;
+    delta: number | null;
+    deltaText: string;
+    gauge?: number;
+  }[] = [
+    {
+      key: 'revenue',
+      label: '월 매출',
+      value: formatMoney(sim.monthlyRevenue),
+      delta: prev ? sim.monthlyRevenue - prev.monthlyRevenue : null,
+      deltaText: prev ? formatSignedMoney(sim.monthlyRevenue - prev.monthlyRevenue) : '',
+    },
+    {
+      key: 'cash',
+      label: '현금',
+      value: formatMoney(sim.cash),
+      delta: prev ? sim.cash - prev.cash : null,
+      deltaText: prev ? formatSignedMoney(sim.cash - prev.cash) : '',
+    },
+    {
+      key: 'customers',
+      label: t.customerWord,
+      value: formatNumber(sim.customers),
+      unit: '명',
+      delta: prev ? sim.customers - prev.customers : null,
+      deltaText: prev ? formatSigned(sim.customers - prev.customers) : '',
+    },
+    {
+      key: 'quality',
+      label: '제품 품질',
+      value: String(Math.round(sim.quality)),
+      unit: '/100',
+      delta: prev ? Math.round(sim.quality) - prev.quality : null,
+      deltaText: prev ? formatSigned(Math.round(sim.quality) - prev.quality) : '',
+      gauge: sim.quality,
+    },
+    {
+      key: 'morale',
+      label: '팀 사기',
+      value: String(Math.round(sim.morale)),
+      unit: '/100',
+      delta: prev ? Math.round(sim.morale) - prev.morale : null,
+      deltaText: prev ? formatSigned(Math.round(sim.morale) - prev.morale) : '',
+      gauge: sim.morale,
+    },
+    {
+      key: 'reputation',
+      label: '평판',
+      value: String(Math.round(sim.reputation)),
+      unit: '/100',
+      delta: prev ? Math.round(sim.reputation) - prev.reputation : null,
+      deltaText: prev ? formatSigned(Math.round(sim.reputation) - prev.reputation) : '',
+      gauge: sim.reputation,
+    },
+  ];
+
+  return (
+    <section aria-label="회사 현황" className="mb-8 space-y-4 print:hidden">
+      <div className="rounded-md border border-line bg-surface p-4">
+        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
+          <p className="text-sm text-muted">
+            <span className="num font-semibold text-ink">{sim.month}</span>개월 경과 / 36개월
+          </p>
+          <Runway game={game} />
+        </div>
+        <TimeStrip game={game} />
+      </div>
+
+      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-3 lg:grid-cols-6">
+        {items.map((it) => (
+          <div key={it.key} className="bg-surface p-3">
+            <p className="text-xs text-muted">{it.label}</p>
+            <p className="num mt-0.5 text-lg font-semibold leading-snug">
+              {it.value}
+              {it.unit ? <span className="ml-0.5 text-xs font-normal text-muted">{it.unit}</span> : null}
+            </p>
+            {it.gauge !== undefined ? bar(it.gauge) : null}
+            <p className={`num mt-1 min-h-4 text-xs ${it.delta === null ? '' : deltaClass(it.delta)}`}>
+              {it.delta === null ? ' ' : `직전 결정 전 대비 ${it.deltaText}`}
+            </p>
+          </div>
+        ))}
+      </div>
+
+      <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
+        <span className="num">
+          인력 {sim.headcount}명 · 월 고정비 {formatMoney(fixed)}
+        </span>
+        <span className="num">가동률 {Math.round(util * 100)}%</span>
+        {util > 1 ? <Badge tone="warn">인력 부족</Badge> : null}
+        {sim.cash < 0 ? (
+          <Badge tone="danger">현금 마이너스 {sim.insolvencyMonths}개월째 · 2개월 연속이면 파산</Badge>
+        ) : null}
+        {sim.debt > 0 ? <Badge tone="neutral">부채 {formatMoney(sim.debt)}</Badge> : null}
+        {sim.dilution > 0 ? <Badge tone="neutral">지분 희석 {sim.dilution}%</Badge> : null}
+      </p>
+    </section>
+  );
+}

@@ -1,36 +1,28 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# Startup Simulator (MVP)
 
-## Getting Started
+창업 수업용 시뮬레이션. 조별로 가상 회사를 세우고 3년간 이벤트를 겪으며 전략을 선택한다.
 
-First, run the development server:
-
+## 실행
 ```bash
-npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
+npm install
+npm run dev        # http://localhost:3000
+npm test           # 엔진 테스트 50개
+npm run typecheck
+npm run balance    # 전략×업종 밸런스 점검
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+## 구조
+- `src/engine` : React 없는 규칙 기반 엔진(재무·점수 계산). AI·API 키 불필요, 결정적.
+- `src/storage` : `StorageAdapter` + `LocalStorageAdapter`(키 `startup-simulator:v1`).
+- `src/components` : 한국어 모바일 대응 UI.
+- `docs/` : PRD, 화면, 데이터 모델, 이벤트, 규칙, 테스트 케이스.
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+## 진행 방식
+수업용(기본): 연차마다 후보 5개 중 상황에 맞는 2개 = 총 6개. 전체: 연차당 5개 = 총 15개. 시작 시 선택.
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Supabase 전환
+`StorageAdapter`를 구현하고 `GameApp`의 `storage`를 교체한다. 테이블: `games(id uuid, owner uuid, data jsonb, updated_at timestamptz)` + RLS(owner). 주의: 효과 수치가 클라이언트 번들에 포함되어 있으므로, 학생에게 숨겨야 한다면 `submitDecision`을 서버(Route Handler)로 옮긴다.
 
-## Learn More
-
-To learn more about Next.js, take a look at the following resources:
-
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
-
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
-
-## Deploy on Vercel
-
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
-
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+## 한계
+- 모든 효과 수치는 교육용 가정이며 실제 성과를 예측하지 않는다.
+- 항상 최저 비용 대안을 고르는 전략도 수업용 모드에서는 상당 비율 생존한다. `src/engine/templates.ts`로 조정 가능.
