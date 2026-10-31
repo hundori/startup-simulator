@@ -1,6 +1,7 @@
 'use client';
 
 import type { Game } from '@/engine';
+import SubmitPanel from './SubmitPanel';
 import { DISCLAIMER_LONG, generateReport, monthToLabel, reportToMarkdown } from '@/engine';
 import TrendCharts from './TrendCharts';
 import { Badge, Button, Callout, VERDICT_LABEL } from './ui';
@@ -116,6 +117,8 @@ export default function FinalReport({ game, onRestart }: { game: Game; onRestart
           <span className="num">{report.discussion.withDissent}</span>건 — {report.discussion.shortLabel}
         </p>
       </section>
+
+      <SubmitPanel game={game} />
 
       <section aria-labelledby="q-h">
         <h2 id="q-h" className="mb-2 text-lg font-semibold">수업에서 이어서 토론할 질문</h2>

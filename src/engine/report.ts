@@ -5,6 +5,7 @@ import { CB_REASONS, DISCLAIMER_LONG, reasonLabel } from './constants';
 import { formatMoney, monthToLabel } from './format';
 import { BUSINESS_TYPES, CUSTOMER_TYPES, REVENUE_MODELS } from './templates';
 import { scoreGame } from './scoring';
+import { withJosa } from './josa';
 
 export interface TurningPoint {
   kind: 'best' | 'worst';
@@ -88,10 +89,10 @@ export function generateReport(game: Game): Report {
     : `${setup.companyName}: 3년을 버텼습니다 (종합 ${score.total}점, 등급 ${score.grade})`;
 
   const summary = [
-    `${bt.label} · ${CUSTOMER_TYPES[setup.customerType].label} · ${REVENUE_MODELS[setup.revenueModel].label} 모델로 ${formatMoney(setup.capital)}을 들여 시작했습니다.`,
-    `${bt.customerWord}는 ${start.customers.toLocaleString('ko-KR')}에서 ${end.customers.toLocaleString('ko-KR')}로, 월 매출은 ${formatMoney(start.revenue)}에서 ${formatMoney(end.revenue)}로 변했습니다.`,
-    `현금은 ${formatMoney(start.cash)}에서 ${formatMoney(end.cash)}가 되었고, 부채는 ${formatMoney(sim.debt)}, 지분 희석은 ${sim.dilution}%입니다.`,
-    `제품 품질 ${start.quality}→${end.quality}, 팀 사기 ${start.morale}→${end.morale}, 평판 ${start.reputation}→${end.reputation}로 마쳤습니다.`,
+    `${bt.label} · ${CUSTOMER_TYPES[setup.customerType].label} · ${REVENUE_MODELS[setup.revenueModel].label} 모델로 ${withJosa(formatMoney(setup.capital), '을/를')} 들여 시작했습니다.`,
+    `${withJosa(bt.customerWord, '은/는')} ${start.customers.toLocaleString('ko-KR')}명에서 ${withJosa(`${end.customers.toLocaleString('ko-KR')}명`, '으로/로')}, 월 매출은 ${formatMoney(start.revenue)}에서 ${withJosa(formatMoney(end.revenue), '으로/로')} 변했습니다.`,
+    `현금은 ${formatMoney(start.cash)}에서 ${withJosa(formatMoney(end.cash), '이/가')} 되었고, 부채는 ${formatMoney(sim.debt)}, 지분 희석은 ${sim.dilution}%입니다.`,
+    `제품 품질 ${start.quality}→${end.quality}, 팀 사기 ${start.morale}→${end.morale}, 평판 ${start.reputation}→${withJosa(String(end.reputation), "으로/로")} 마쳤습니다.`,
   ];
 
   const ranked = decisions

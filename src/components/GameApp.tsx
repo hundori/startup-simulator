@@ -19,6 +19,8 @@ import IntroScreen from './IntroScreen';
 import PhaseBar from './PhaseBar';
 import OutcomeScreen from './OutcomeScreen';
 import SetupScreen from './SetupScreen';
+import LandingScreen from './LandingScreen';
+import TeacherDashboard from './TeacherDashboard';
 import StatusPanel from './StatusPanel';
 import { Callout } from './ui';
 
@@ -48,6 +50,8 @@ export default function GameApp() {
   const [saveError, setSaveError] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [confirmReset, setConfirmReset] = useState(false);
+  const [started, setStarted] = useState(false);
+  const [teacher, setTeacher] = useState(false);
 
   const commit = useCallback((next: Game) => {
     setGame(next);
@@ -91,8 +95,14 @@ export default function GameApp() {
   };
 
   let body: React.ReactNode;
-  if (!game) {
-    body = <SetupScreen onStart={start} notice={notice} />;
+  if (teacher) {
+    body = <TeacherDashboard onBack={() => setTeacher(false)} />;
+  } else if (!game) {
+    body = started || notice ? (
+      <SetupScreen onStart={start} notice={notice} />
+    ) : (
+      <LandingScreen onStart={() => { setStarted(true); window.scrollTo({ top: 0 }); }} onTeacher={() => setTeacher(true)} />
+    );
   } else if (game.phase === 'intro') {
     body = <IntroScreen game={game} onBegin={() => commit(beginSimulation(game))} />;
   } else if (game.phase === 'event' && event) {
@@ -117,6 +127,7 @@ export default function GameApp() {
     );
   }
 
+  const landing = !teacher && !game && !started && !notice;
   const inGame = game !== null && game.phase !== 'finished';
 
   return (
@@ -158,7 +169,7 @@ export default function GameApp() {
         ) : null}
       </header>
 
-      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
+      <main className={landing ? '' : 'mx-auto max-w-6xl px-4 py-8 sm:px-6'}>
         {saveError ? (
           <div className="mb-6">
             <Callout tone="warn" role="alert">

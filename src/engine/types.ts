@@ -68,6 +68,7 @@ export interface SimState {
   insolvencyMonths: number;
   /** 시장 압력 배율(수업용 모드는 결정 횟수가 적어 낮춘다). 이전 저장본에는 없을 수 있다. */
   pressure?: number;
+  customerType?: CustomerType; // 이전 저장본에는 없다
   /** 소액 창업 규모 배율(0.02~1). 초기 자본이 5,000만원 미만이면 금액·고객 규모를 함께 줄인다. 이전 저장본에는 없다(=1). */
   scale?: number;
   flags: string[];
@@ -142,6 +143,7 @@ export interface GameEvent {
   situation: string;
   contextByType?: Partial<Record<BusinessType, string>>;
   appliesTo?: BusinessType[];
+  appliesToCustomer?: CustomerType[]; // 고객 유형(B2C/B2B)이 맞을 때만 나온다
   applicableWhen?: Cond[];
   fallbackId?: string;
   isFallback?: boolean;

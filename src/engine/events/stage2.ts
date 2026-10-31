@@ -7,6 +7,8 @@ export const STAGE2_EVENTS: GameEvent[] = [
     id: 'e06-big-partner',
     stage: 2,
     order: 6,
+    appliesToCustomer: ['b2b'],
+    fallbackId: 'e06f-big-channel',
     title: '큰 파트너의 제안',
     reason: 'ignored-customers',
     weight: 2,
@@ -81,6 +83,89 @@ export const STAGE2_EVENTS: GameEvent[] = [
             effects: { cash: 1200, customersPct: 0.12, overhead: 80, morale: -1, flags: ['key-account'] },
             text: '맞춤 개발은 별도 인력이 맡아 기존 제품은 영향이 적었습니다. 고정 비용이 늘었지만 새 수익원을 얻었습니다.',
             verdict: 'ok',
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'e06f-big-channel',
+    stage: 2,
+    order: 6,
+    isFallback: true,
+    title: '대형 채널의 제휴 제안',
+    reason: 'poor-marketing',
+    weight: 0,
+    situation:
+      '{target}가 많이 이용하는 대형 채널(인기 커뮤니티·앱·유통 플랫폼)이 {company}에 제휴를 제안했습니다. 메인 노출을 약속하지만 6개월 독점, 수수료 인상, 이용 데이터 공유가 조건입니다. 지금 팀은 갑자기 늘 문의를 받을 준비가 되어 있지 않습니다.',
+    contextByType: {
+      saas: '앱 마켓 상단 노출과 번들 할인 조건입니다.',
+      commerce: '대형 쇼핑 플랫폼이 기획전과 독점 입점을 제안했습니다.',
+      offline: '지역 배달·예약 앱이 상단 노출과 수수료 인상을 함께 제안했습니다.',
+      content: '대형 구독 플랫폼이 번들 입점을 제안했습니다.',
+      platform: '대형 포털이 연동과 광고 지면을 제안했습니다.',
+    },
+    discussionPrompts: [
+      '이 채널이 없어지면 우리 고객의 몇 %가 사라지는가?',
+      '{target}가 우리를 "브랜드"로 기억할까, "그 채널의 한 입점사"로 기억할까?',
+      '수수료를 낸 뒤에도 고객 한 명당 남는 돈이 있는가?',
+    ],
+    options: [
+      {
+        id: 'accept-all',
+        label: '조건 그대로 수락',
+        description: '독점과 수수료 인상을 받아들이고 노출을 확보한다.',
+        cost: 300,
+        outcomes: [
+          {
+            effects: { customersPct: 0.25, arpuPct: -0.08, acqBasePct: -0.1, reputation: 2, morale: -2, flags: ['dependency'] },
+            text: '노출이 크게 늘어 고객이 빠르게 늘었지만 수수료로 고객당 남는 돈이 줄었습니다. 직접 유입 채널은 키우지 못해 이 채널에 대한 의존이 커졌습니다.',
+            verdict: 'ok',
+          },
+        ],
+      },
+      {
+        id: 'negotiate',
+        label: '독점 제외·기간 단축으로 협상',
+        description: '3개월 시범 운영과 독점 제외를 조건으로 역제안한다. 시간과 협상력이 필요하다.',
+        cost: 150,
+        outcomes: [
+          {
+            when: [gte('reputation', 40)],
+            effects: { customersPct: 0.12, arpuPct: -0.03, reputation: 3, quality: 1 },
+            text: '우리 지표가 협상력이 되어 시범 운영으로 합의했습니다. 노출 효과는 작지만 의존도와 수수료 부담은 낮게 유지했습니다.',
+            verdict: 'strong',
+          },
+          {
+            effects: { customersPct: 0.04, morale: -2 },
+            text: '협상력이 부족해 조건이 거의 바뀌지 않았고, 협상하는 동안 제안한 쪽의 관심도 식었습니다.',
+            verdict: 'weak',
+          },
+        ],
+      },
+      {
+        id: 'own-channel',
+        label: '거절하고 직접 만든 커뮤니티·추천에 집중',
+        description: '{target}와 직접 만나는 채널(커뮤니티·추천 보상)에 예산을 쓴다.',
+        cost: 200,
+        outcomes: [
+          {
+            effects: { customersPct: 0.05, churnRate: -0.008, reputation: 3, acqBasePct: 0.05, flags: ['owned-channel'] },
+            text: '성장은 느리지만 직접 유입이 쌓이고 고객 이탈이 줄었습니다. 대형 노출을 놓친 아쉬움은 남습니다.',
+            verdict: 'ok',
+          },
+        ],
+      },
+      {
+        id: 'ignore',
+        label: '검토만 하고 답을 미룬다',
+        description: '지금은 제품이 먼저라며 결정을 미룬다.',
+        cost: 0,
+        outcomes: [
+          {
+            effects: { reputation: -1, morale: -1 },
+            text: '답을 미루는 사이 제안은 경쟁사에게 돌아갔습니다. 잃은 것은 없지만 얻은 것도 없습니다.',
+            verdict: 'weak',
           },
         ],
       },
@@ -179,7 +264,7 @@ export const STAGE2_EVENTS: GameEvent[] = [
     reason: 'poor-marketing',
     weight: 2,
     situation:
-      '{company}는 지금까지 지인 추천과 소셜 미디어로 고객을 얻었습니다. 광고를 늘리면 고객이 빠르게 늘 것 같지만, 신규 고객 한 명을 얻는 비용이 슬금슬금 오르고 있습니다.',
+      '{company:은/는} 지금까지 지인 추천과 소셜 미디어로 {target} 고객을 얻었습니다. 광고를 늘리면 고객이 빠르게 늘 것 같지만, 신규 고객 한 명을 얻는 비용이 슬금슬금 오르고 있습니다.',
     discussionPrompts: [
       '우리의 고객 획득 비용(CAC)과 고객이 평생 내는 돈(LTV)은 각각 얼마인가?',
       '광고를 끊어도 오는 고객은 몇 %인가?',
@@ -332,7 +417,7 @@ export const STAGE2_EVENTS: GameEvent[] = [
     appliesTo: ['saas', 'commerce', 'content', 'platform'],
     fallbackId: 'e10f-lease',
     situation:
-      '{company}가 의존하는 외부 플랫폼(앱 마켓·결제대행·검색·온라인 몰)이 정책을 바꿨습니다. 수수료가 오르고 개인정보 처리 기준도 강화되어, 대응하지 않으면 노출이 줄거나 계정이 제한될 수 있습니다.',
+      '{company:이/가} 의존하는 외부 플랫폼(앱 마켓·결제대행·검색·온라인 몰)이 정책을 바꿨습니다. 수수료가 오르고 개인정보 처리 기준도 강화되어, 대응하지 않으면 노출이 줄거나 계정이 제한될 수 있습니다.',
     contextByType: {
       saas: '앱 마켓 수수료가 인상되고 구독 결제 방식에 새로운 심사 기준이 적용됩니다.',
       commerce: '입점 몰의 수수료와 광고 순위 기준이 바뀌었습니다.',
@@ -414,7 +499,7 @@ export const STAGE2_EVENTS: GameEvent[] = [
     weight: 0,
     isFallback: true,
     situation:
-      '{company}가 입주한 상가의 임대료가 15% 오른다는 통보를 받았습니다. 건물주는 "다른 임차인이 더 낸다고 한다"고 말합니다. 단골은 늘고 있지만 월 고정비 부담이 커졌습니다.',
+      '{company:이/가} 입주한 상가의 임대료가 15% 오른다는 통보를 받았습니다. 건물주는 "다른 임차인이 더 낸다고 한다"고 말합니다. 단골은 늘고 있지만 월 고정비 부담이 커졌습니다.',
     discussionPrompts: [
       '임대료는 매출의 몇 %까지 감당할 수 있는가?',
       '위치가 매출에 미치는 영향은 얼마나 큰가?',

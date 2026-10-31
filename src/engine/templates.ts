@@ -227,6 +227,7 @@ export function createInitialState(setup: SetupInput): SimState {
     reputation: 35,
     headcount: setup.members,
     scale: k,
+    customerType: setup.customerType,
     avgSalary: Math.round(250 * k * 10) / 10,
     marketingBudget: Math.round(100 * k),
     overhead: Math.round(t.overhead * k),

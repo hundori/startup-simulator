@@ -11,7 +11,7 @@ export const STAGE1_EVENTS: GameEvent[] = [
     reason: 'no-market-need',
     weight: 3,
     situation:
-      '{company}의 첫 버전이 나온 지 석 달이 지났습니다. 사용자 인터뷰 20건에서 "아이디어는 좋다"는 반응은 많았지만, 실제로 돈을 내겠다는 사람은 3명뿐입니다. 팀 안에서는 "기능이 부족해서 그렇다"는 의견과 "애초에 해결하려는 문제가 약한 게 아니냐"는 의견이 갈립니다.',
+      '{company}의 첫 버전("{idea}")이 나온 지 석 달이 지났습니다. {target} 20명과 한 인터뷰에서 "아이디어는 좋다"는 반응은 많았지만, 실제로 돈을 내겠다는 사람은 3명뿐입니다. 팀 안에서는 "기능이 부족해서 그렇다"는 의견과 "애초에 해결하려는 문제가 약한 게 아니냐"는 의견이 갈립니다.',
     contextByType: {
       saas: '무료 체험 가입자의 70%가 첫 주 이후 다시 로그인하지 않았습니다.',
       commerce: '첫 구매 후 재구매한 고객이 거의 없고, 후기에는 "예쁘지만 꼭 필요하진 않다"는 말이 많습니다.',
@@ -33,8 +33,8 @@ export const STAGE1_EVENTS: GameEvent[] = [
         cost: 300,
         outcomes: [
           {
-            effects: { quality: 4, reputation: 2, customersPct: 0.05, arpuPct: 0.1, morale: 3, flags: ['validated'] },
-            text: '인터뷰에서 "진짜 쓰는 상황"이 두 가지로 좁혀졌습니다. 가격 실험에서는 가장 급한 고객층이 기존 가격의 1.1배도 받아들였고, 핵심 고객 정의가 선명해졌습니다.',
+            effects: { quality: 3, reputation: 2, customersPct: 0.03, arpuPct: 0.1, acqBasePct: -0.06, morale: -1, flags: ['validated'] },
+            text: '인터뷰에서 "진짜 쓰는 상황"이 두 가지로 좁혀졌고 가장 급한 고객층은 기존 가격의 1.1배도 받아들였습니다. 대신 개발을 2주 멈춘 사이 출시 일정이 밀려 신규 유입이 둔해졌고, 한 팀원은 "말만 듣다 시간을 보냈다"며 불만을 드러냈습니다.',
             verdict: 'strong',
           },
         ],
@@ -95,7 +95,7 @@ export const STAGE1_EVENTS: GameEvent[] = [
     weight: 2,
     boosts: [{ when: [lte('runway', 8)], add: 3 }],
     situation:
-      '지금 속도로 쓰면 {company}의 현금은 몇 달 안에 바닥납니다. 투자자 두세 곳이 관심을 보였지만 "지표를 더 보고 싶다"고 말합니다. 비용을 줄이자니 성장이 멈출 것 같습니다.',
+      '지금 속도로 쓰면 {company}의 현금은 몇 달 안에 바닥납니다. 투자자 두세 곳이 "{target} 시장이 정말 큰가"를 묻고 "지표를 더 보고 싶다"고 말합니다. 비용을 줄이자니 성장이 멈출 것 같습니다.',
     discussionPrompts: [
       '우리가 투자를 받아야 하는 이유는 "성장"인가 "생존"인가?',
       '비용 절감은 어느 선부터 "살을 깎는" 수준인가?',
@@ -200,8 +200,14 @@ export const STAGE1_EVENTS: GameEvent[] = [
         cost: 0,
         outcomes: [
           {
-            effects: { morale: 10, quality: 1, flags: ['vesting'] },
-            text: '대화는 불편했지만 역할 문서와 베스팅 규칙이 생겼습니다. 이후 의사결정 기준이 분명해져 팀이 안정됐습니다.',
+            when: [lte('morale', 60)],
+            effects: { morale: -6, quality: -3, headcount: -1, acqBasePct: -0.05, flags: ['vesting', 'cofounder-left'] },
+            text: '팀 분위기가 이미 가라앉은 상태에서 지분 규칙을 꺼내자 "나를 못 믿는 거냐"는 반발이 나왔고, 공동창업자가 팀을 떠났습니다. 규칙은 남았지만 핵심 개발이 두 달 멈췄습니다.',
+            verdict: 'weak',
+          },
+          {
+            effects: { morale: 6, quality: -1, flags: ['vesting'] },
+            text: '여러 번의 불편한 대화 끝에 역할 문서와 베스팅 규칙이 생겼습니다. 의사결정 기준이 분명해졌지만, 협의에 몰두한 몇 주 동안 제품 개선은 멈춰 있었습니다.',
             verdict: 'strong',
           },
         ],
@@ -212,6 +218,12 @@ export const STAGE1_EVENTS: GameEvent[] = [
         description: '경험 있는 멘토가 제3자로서 갈등을 정리하도록 돕는다.',
         cost: 150,
         outcomes: [
+          {
+            when: [lte('morale', 60)],
+            effects: { morale: 8, flags: ['mentor'] },
+            text: '제3자가 있으니 서로 하고 싶은 말을 꺼낼 수 있었고, 감정이 가라앉은 뒤에야 역할 정리 이야기를 시작할 수 있었습니다. 시간은 걸렸지만 이탈 없이 넘겼습니다.',
+            verdict: 'strong',
+          },
           {
             effects: { morale: 6, flags: ['mentor'] },
             text: '멘토가 갈등을 정리해 주었고 한 달에 한 번 점검 회의를 하기로 했습니다. 다만 구조적 합의 없이 분위기만 풀린 부분이 남았습니다.',
@@ -256,7 +268,7 @@ export const STAGE1_EVENTS: GameEvent[] = [
     weight: 0,
     isFallback: true,
     situation:
-      '{company}는 사실상 대표 한 명이 개발, 영업, 고객 응대를 모두 맡고 있습니다. 최근 석 달 동안 쉰 날이 거의 없고, 작은 실수가 반복되며 고객 불만이 늘고 있습니다.',
+      '{company:은/는} 사실상 대표 한 명이 개발, 영업, 고객 응대를 모두 맡고 있습니다. 최근 석 달 동안 쉰 날이 거의 없고, 작은 실수가 반복되며 고객 불만이 늘고 있습니다.',
     discussionPrompts: [
       '대표가 하는 일 중 "대표만 할 수 있는 일"은 무엇인가?',
       '첫 채용·외주·자동화 중 무엇이 가장 싸게 병목을 푸는가?',
@@ -326,7 +338,7 @@ export const STAGE1_EVENTS: GameEvent[] = [
     weight: 2,
     boosts: [{ when: [gte('customers', 200)], add: 1 }],
     situation:
-      '대기업이 {company}와 비슷한 서비스를 더 낮은 가격에 내놓았습니다. 고객 몇 명이 "그쪽은 더 싸던데요"라며 문의를 해 왔습니다. 우리는 자원이 적고, 상대는 마케팅 예산이 우리의 수십 배입니다.',
+      '대기업이 {company:과/와} 비슷한 서비스를 더 낮은 가격에 내놓았습니다. {target} 중 몇 명이 "그쪽은 더 싸던데요"라며 문의를 해 왔습니다. 우리는 자원이 적고, 상대는 마케팅 예산이 우리의 수십 배입니다.',
     contextByType: {
       saas: '상대는 첫 6개월 무료 프로모션을 하고 있습니다.',
       commerce: '상대는 무료배송과 상시 할인으로 가격 비교 순위 최상단에 올랐습니다.',

@@ -12,6 +12,7 @@ import type {
 import { MIN_RATIONALE_LENGTH } from './constants';
 import { getEvent } from './events';
 import { hashString } from './rng';
+import { fillText, shortIdea } from './josa';
 import {
   advanceMonth,
   applyEffects,
@@ -72,7 +73,11 @@ export function beginSimulation(game: Game): Game {
 }
 
 function fill(text: string, game: Game): string {
-  return text.split('{company}').join(game.setup.companyName);
+  return fillText(text, {
+    company: game.setup.companyName,
+    target: game.setup.targetCustomer.trim(),
+    idea: shortIdea(game.setup.idea),
+  });
 }
 
 function visibleOptions(game: Game, options: EventOption[]): EventOption[] {
@@ -84,8 +89,8 @@ export function toPublicOption(game: Game, option: EventOption): PublicOption {
   const { available, reasons } = evaluateOption(game.sim, option);
   return {
     id: option.id,
-    label: option.label,
-    description: option.description,
+    label: fill(option.label, game),
+    description: fill(option.description, game),
     cost: scaleMoney(game.sim, option.cost ?? 0),
     minHeadcount: option.minHeadcount ?? null,
     available,
@@ -104,8 +109,8 @@ export function resolveEvent(game: Game): ResolvedEvent | null {
     title: ev.title,
     reason: ev.reason,
     situation: fill(ev.situation, game),
-    context: ev.contextByType?.[game.sim.businessType] ?? null,
-    discussionPrompts: ev.discussionPrompts,
+    context: ev.contextByType?.[game.sim.businessType] ? fill(ev.contextByType[game.sim.businessType] as string, game) : null,
+    discussionPrompts: ev.discussionPrompts.map((p) => fill(p, game)),
     options: visibleOptions(game, ev.options).map((o) => toPublicOption(game, o)),
     index: game.planIndex,
     total: game.plan.length,
@@ -171,7 +176,7 @@ export function submitDecision(
     afterImmediate,
     afterPeriod: snapshot(sim),
     monthsElapsed: elapsed,
-    outcomeText: outcome.text,
+    outcomeText: fill(outcome.text, game),
     verdict: outcome.verdict,
     reason: ev.reason,
     cost,

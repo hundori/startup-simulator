@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { Game, ResolvedEvent } from '@/engine';
-import { MIN_RATIONALE_LENGTH, formatMoney, reasonLabel } from '@/engine';
+import { MIN_RATIONALE_LENGTH, formatMoney, reasonLabel, shortIdea } from '@/engine';
 import Choice from './Choice';
 import { Badge, Button, Callout, STAGE_LABEL } from './ui';
 
@@ -98,6 +98,7 @@ export default function EventScreen({
         <div className="mt-4 border-l-[3px] border-brass pl-4">
           <p className="leading-relaxed">{event.situation}</p>
           {event.context ? <p className="mt-2 text-sm text-muted">{event.context}</p> : null}
+          <p className="mt-3 text-xs text-muted">우리 아이디어: {shortIdea(game.setup.idea, 60)} · 대상: {game.setup.targetCustomer}</p>
         </div>
       </header>
 

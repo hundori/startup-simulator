@@ -9,6 +9,7 @@ import {
   monthlyInterest,
   payroll,
   utilization,
+  withJosa,
 } from '@/engine';
 import { Button, Callout } from './ui';
 
@@ -36,7 +37,7 @@ export default function IntroScreen({ game, onBegin }: { game: Game; onBegin: ()
   return (
     <article className="max-w-2xl space-y-6">
       <header>
-        <h1 className="text-3xl font-bold leading-tight">{setup.companyName}이(가) 문을 열었습니다</h1>
+        <h1 className="text-3xl font-bold leading-tight">{withJosa(setup.companyName, '이/가')} 문을 열었습니다</h1>
         <p className="mt-3 whitespace-pre-wrap text-muted">{setup.idea}</p>
       </header>
 

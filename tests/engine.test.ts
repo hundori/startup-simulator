@@ -468,3 +468,27 @@ describe('H. 점수·보고서·저장', () => {
   });
 });
 
+
+import { withJosa, fillText, encodeSubmission, decodeSubmission, buildSubmission, submissionsToCsv } from '../src/engine';
+
+describe('조사·제출 코드', () => {
+  it('받침에 따라 조사를 고른다', () => {
+    expect(withJosa('케어메이트', '이/가')).toBe('케어메이트가');
+    expect(withJosa('모아케어', '은/는')).toBe('모아케어는');
+    expect(withJosa('책', '이/가')).toBe('책이');
+    expect(withJosa('서울', '으로/로')).toBe('서울로');
+    expect(withJosa('집', '으로/로')).toBe('집으로');
+    expect(withJosa('1,278만원', '으로/로')).toBe('1,278만원으로');
+  });
+  it('템플릿 토큰을 채운다', () => {
+    expect(fillText('{company:이/가} {target:을/를} 찾는다', { company: '모아', target: '대학생', idea: '앱' })).toBe('모아가 대학생을 찾는다');
+  });
+  it('제출 코드는 인코딩·복원된다', () => {
+    const g = newGame();
+    const code = encodeSubmission(buildSubmission(g));
+    const back = decodeSubmission(code);
+    expect(back?.team).toBe(g.setup.companyName);
+    expect(decodeSubmission('엉터리')).toBeNull();
+    expect(submissionsToCsv([back!]).startsWith('﻿')).toBe(true);
+  });
+});

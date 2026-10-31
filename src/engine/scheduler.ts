@@ -8,6 +8,7 @@ export const CLASS_MODE_EVENTS_PER_STAGE = 2;
 /** 업종·상태 조건에 맞는 이벤트인가 */
 export function isEventApplicable(ev: GameEvent, sim: SimState): boolean {
   if (ev.appliesTo && !ev.appliesTo.includes(sim.businessType)) return false;
+  if (ev.appliesToCustomer && sim.customerType && !ev.appliesToCustomer.includes(sim.customerType)) return false;
   return evalConds(sim, ev.applicableWhen);
 }
 

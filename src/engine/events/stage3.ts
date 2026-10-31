@@ -46,8 +46,8 @@ export const STAGE3_EVENTS: GameEvent[] = [
         outcomes: [
           {
             when: [gte('reputation', 50), gte('customers', 200)],
-            effects: { cashMonths: 20, dilution: 18, morale: 5, reputation: 3, flags: ['seriesA'] },
-            text: '협상으로 희석과 목표를 낮추고도 투자를 받았습니다. 지표가 협상력을 뒷받침했습니다.',
+            effects: { cashMonths: 20, dilution: 18, morale: 3, reputation: 3, acqBasePct: -0.04, flags: ['seriesA'] },
+            text: '협상으로 희석과 목표를 낮추고도 투자를 받았습니다. 다만 협상에 매달린 두 달 동안 영업과 제품 개선이 느려졌습니다.',
             verdict: 'strong',
           },
           {
@@ -105,7 +105,7 @@ export const STAGE3_EVENTS: GameEvent[] = [
     reason: 'geo-expansion',
     weight: 2,
     situation:
-      '{company}의 기존 시장 성장이 둔화되면서 팀은 해외 또는 새로운 지역 진출을 검토하고 있습니다. 현지 시장은 크지만 언어, 규제, 결제 방식, 고객 습관이 달라 우리가 아는 방식이 그대로 통하지 않을 수 있습니다.',
+      '{company}가 지금까지 공략해 온 {target} 시장의 성장이 둔화되면서 팀은 해외 또는 새로운 지역 진출을 검토하고 있습니다. 현지 시장은 크지만 언어, 규제, 결제 방식, 고객 습관이 달라 우리가 아는 방식이 그대로 통하지 않을 수 있습니다.',
     contextByType: {
       saas: '일본·동남아 시장이 후보입니다.',
       commerce: '해외 직구 플랫폼 입점과 현지 물류가 쟁점입니다.',
