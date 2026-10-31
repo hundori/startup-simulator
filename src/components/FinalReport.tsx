@@ -123,6 +123,25 @@ export default function FinalReport({ game, onRestart }: { game: Game; onRestart
 
       <AdvisorPicker game={game} />
 
+      {report.choiceInsights.length > 0 ? (
+        <section aria-labelledby="ch-h">
+          <h2 id="ch-h" className="mb-1 text-lg font-semibold">우리가 실제로 고른 선택으로 본 인사이트</h2>
+          <p className="mb-3 text-sm text-muted">결정 기록에서 월 고정비와 런웨이가 어떻게 달라졌는지 직접 짚었습니다.</p>
+          <ul className="space-y-3">
+            {report.choiceInsights.map((i) => (
+              <li key={i.eyebrow} className="rounded-md border border-line border-l-[3px] border-l-brass bg-surface p-4">
+                <p className="text-xs text-muted">{i.eyebrow}</p>
+                <p className="mt-0.5 flex flex-wrap items-center gap-2 font-semibold">
+                  {i.title}
+                  {i.tag ? <Badge tone="accent">{i.tag}</Badge> : null}
+                </p>
+                <p className="mt-1 text-sm leading-relaxed text-muted">{i.text}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <section aria-labelledby="ins-h">
         <h2 id="ins-h" className="mb-1 text-lg font-semibold">이 시뮬레이션에서 얻은 인사이트</h2>
         <p className="mb-3 text-sm text-muted">우리 팀의 3년 기록에서 읽을 수 있는 것입니다. 숫자와 선택을 근거로 한 교육용 해석입니다.</p>

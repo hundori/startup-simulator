@@ -236,6 +236,10 @@ export interface DecisionRecord {
   verdict: Verdict;
   reason: CbReasonId;
   cost: number;
+  fixedBefore?: number; // 결정 전 월 고정비
+  fixedAfter?: number; // 결정 효과 적용 직후 월 고정비
+  runwayBefore?: number | null; // 결정 전 런웨이(null=흑자 구조)
+  runwayAfter?: number | null; // 다음 결정 시점의 런웨이
   notes: string[];
 }
 

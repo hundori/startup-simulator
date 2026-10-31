@@ -29,6 +29,8 @@ export interface ReasonStat {
 export interface Insight {
   title: string;
   text: string;
+  tag?: string; // 예: 월 고정비 +250만원
+  eyebrow?: string; // 예: 2년 차 · 인력 채용
 }
 
 export interface Report {
@@ -38,6 +40,7 @@ export interface Report {
   turningPoints: TurningPoint[];
   reasons: ReasonStat[];
   discussion: { total: number; avgLength: number; withDissent: number; shortLabel: string };
+  choiceInsights: Insight[]; // 팀이 실제로 고른 대안을 직접 짚은 것
   insights: Insight[]; // 우리 팀의 결과에서 읽을 수 있는 것
   principles: Insight[]; // 이 시뮬레이션이 주는 일반 원칙
   questions: string[];
@@ -108,6 +111,91 @@ export const PRINCIPLES: Insight[] = [
     text: '같은 선택도 회사 상태에 따라 다른 결과가 나옵니다. 그래서 "무엇을 골랐나"보다 "어떤 수치와 가정을 보고 골랐나"를 남기는 것이 실제 창업에서도 가장 재사용 가능한 자산입니다.',
   },
 ];
+
+const runwayText = (r: number | null | undefined): string => (r === null ? '흑자 구조' : (r as number) >= 60 ? '5년 이상' : `${(r as number).toFixed(1)}개월`);
+const signed = (v: number): string => `${v >= 0 ? '+' : '−'}${formatMoney(Math.abs(Math.round(v)))}`;
+
+/** 팀이 실제로 고른 대안에서 월 고정비·런웨이가 어떻게 달라졌는지 직접 짚는다. 저장된 옛 기록은 건너뛴다. */
+function buildChoiceInsights(game: Game): Insight[] {
+  type D = DecisionRecord & { fixedBefore: number; fixedAfter: number; runwayBefore: number | null; runwayAfter: number | null };
+  const ds = game.decisions.filter(
+    (d): d is D => d.fixedBefore !== undefined && d.fixedAfter !== undefined && d.runwayBefore !== undefined && d.runwayAfter !== undefined,
+  );
+  const picked: Insight[] = [];
+  const used = new Set<string>();
+  const head = (d: D) => `${d.stage}년 차 '${d.eventTitle}'에서 ${withJosa(`'${d.optionLabel}'`, '을/를')} 택해`;
+  const eyebrow = (d: D) => `${d.stage}년 차 · ${d.eventTitle}`;
+  const add = (d: D | undefined, text: string, tag: string) => {
+    if (!d || used.has(d.eventId)) return;
+    used.add(d.eventId);
+    picked.push({ title: `선택: ${d.optionLabel}`, eyebrow: eyebrow(d), text, tag });
+  };
+  const runwayChange = (d: D): string => {
+    if (d.runwayBefore === d.runwayAfter) return `런웨이는 ${runwayText(d.runwayAfter)} 그대로였습니다`;
+    const down = d.runwayBefore === null || (d.runwayAfter !== null && d.runwayAfter < d.runwayBefore);
+    return `그 뒤 런웨이는 ${runwayText(d.runwayBefore)}에서 ${withJosa(runwayText(d.runwayAfter), '으로/로')} ${down ? '줄었습니다' : '늘었습니다'}`;
+  };
+
+  // 0) 긴급 생존 카드
+  const em = ds.find((d) => d.eventId === EMERGENCY_EVENT_ID);
+  if (em) {
+    const cashIn = em.afterImmediate.cash - em.before.cash + em.cost;
+    add(
+      em,
+      `런웨이가 ${runwayText(em.runwayBefore)}까지 떨어진 상황에서 ${withJosa(`'${em.optionLabel}'`, '을/를')} 택했습니다. 월 고정비는 ${em.fixedAfter === em.fixedBefore ? '그대로였고' : em.fixedAfter < em.fixedBefore ? `${formatMoney(em.fixedBefore - em.fixedAfter)} 줄었고` : `${formatMoney(em.fixedAfter - em.fixedBefore)} 늘었고`}, 즉시 들어온 현금은 ${cashIn > 0 ? formatMoney(cashIn) : '없었으며'}, ${runwayChange(em)}. 지분·팀·신뢰 중 무엇을 내주고 시간을 샀는지 토론해 보세요.`,
+      '긴급 생존 카드',
+    );
+  }
+
+  // 1) 월 고정비를 가장 많이 늘린 선택
+  const up = [...ds].filter((d) => d.fixedAfter - d.fixedBefore > 0).sort((a, b) => b.fixedAfter - b.fixedBefore - (a.fixedAfter - a.fixedBefore))[0];
+  if (up) {
+    const delta = up.fixedAfter - up.fixedBefore;
+    add(
+      up,
+      `${head(up)} 월 고정비가 ${signed(delta)} 늘었고(${formatMoney(up.fixedBefore)}→${formatMoney(up.fixedAfter)}), ${runwayChange(up)}. 이 증가분은 1년이면 ${withJosa(formatMoney(delta * 12), '이/가')} 됩니다${up.cost > 0 ? `. 같은 결정의 일회성 비용 ${formatMoney(up.cost)}보다 훨씬 오래 부담이 이어집니다` : ''}. 이 고정비를 매출이 따라잡았는지 확인해 보세요.`,
+      `월 고정비 ${signed(delta)}`,
+    );
+  }
+
+  // 2) 월 고정비를 가장 많이 줄인 선택
+  const down = [...ds].filter((d) => d.fixedAfter - d.fixedBefore < 0).sort((a, b) => a.fixedAfter - a.fixedBefore - (b.fixedAfter - b.fixedBefore))[0];
+  if (down) {
+    const delta = down.fixedAfter - down.fixedBefore;
+    add(
+      down,
+      `${head(down)} 월 고정비를 ${formatMoney(-delta)} 줄였고(${formatMoney(down.fixedBefore)}→${formatMoney(down.fixedAfter)}), ${runwayChange(down)}. 비용을 줄인 대가로 고객·팀·품질에서 잃은 것은 없는지도 함께 보세요(결과: ${VERDICT_WORD[down.verdict]}).`,
+      `월 고정비 ${signed(delta)}`,
+    );
+  }
+
+  // 3) 런웨이를 가장 많이 깎은 선택 (고정비 변화와 상관없이)
+  const drop = (d: D): number =>
+    d.runwayBefore === null ? (d.runwayAfter === null ? 0 : 99 - d.runwayAfter) : d.runwayAfter === null ? 0 : d.runwayBefore - d.runwayAfter;
+  const worst = [...ds].filter((d) => drop(d) > 1).sort((a, b) => drop(b) - drop(a))[0];
+  if (worst) {
+    add(
+      worst,
+      `${head(worst)} 일회성 비용 ${worst.cost > 0 ? formatMoney(worst.cost) : '없이'}${worst.fixedAfter !== worst.fixedBefore ? `, 월 고정비 ${signed(worst.fixedAfter - worst.fixedBefore)}로` : ''} 진행했고, ${runwayChange(worst)}. 다음 결정 시점까지 런웨이가 가장 크게 줄어든 구간입니다. 결정 자체의 효과와 그 사이 흘러간 시간이 함께 반영된 수치입니다(결과: ${VERDICT_WORD[worst.verdict]}).`,
+      `런웨이 ${runwayText(worst.runwayBefore)}→${runwayText(worst.runwayAfter)}`,
+    );
+  }
+
+  // 5) 고정비 변화가 하나도 없었다면, 일회성 비용이 가장 컸던 선택을 짚는다
+  if (picked.length === 0) {
+    const big = [...ds].sort((a, b) => b.cost - a.cost)[0];
+    if (big && big.cost > 0) {
+      add(
+        big,
+        `${head(big)} 일회성 비용 ${withJosa(formatMoney(big.cost), '을/를')} 한 번 썼고 월 고정비는 변하지 않았습니다. ${runwayChange(big)}. 한 번 쓰고 끝나는 돈이라 부담이 일시적이었는지, 그만한 효과가 있었는지 보세요.`,
+        `일회성 ${formatMoney(big.cost)}`,
+      );
+    }
+  }
+  return picked.slice(0, 4);
+}
+
+const VERDICT_WORD: Record<Verdict, string> = { strong: '좋음', ok: '보통', weak: '아쉬움' };
 
 function buildInsights(game: Game): Insight[] {
   const { setup, sim, history, decisions } = game;
@@ -264,7 +352,8 @@ export function generateReport(game: Game): Report {
   endNotes.push(DISCLAIMER_LONG);
 
   const insights = buildInsights(game);
-  return { score, headline, summary, turningPoints, reasons, discussion, insights, principles: PRINCIPLES, questions, endNotes };
+  const choiceInsights = buildChoiceInsights(game);
+  return { score, headline, summary, turningPoints, reasons, discussion, choiceInsights, insights, principles: PRINCIPLES, questions, endNotes };
 }
 
 export function reportToMarkdown(game: Game, report: Report): string {
@@ -286,6 +375,11 @@ export function reportToMarkdown(game: Game, report: Report): string {
         `- ${t.kind === 'best' ? '가장 좋았던 결정' : '가장 아쉬웠던 결정'}: ${t.decision.eventTitle} → ${t.decision.optionLabel}`,
       );
     }
+    lines.push('');
+  }
+  if (report.choiceInsights.length) {
+    lines.push('## 우리가 실제로 고른 선택으로 본 인사이트', '');
+    for (const i of report.choiceInsights) lines.push(`- [${i.eyebrow}] ${i.title} — ${i.text}`);
     lines.push('');
   }
   lines.push('## 이 시뮬레이션에서 얻은 인사이트', '');

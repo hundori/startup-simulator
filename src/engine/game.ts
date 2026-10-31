@@ -17,6 +17,7 @@ import {
   advanceMonth,
   applyEffects,
   scaleMoney,
+  computeRunway,
   evaluateOption,
   isRunwayCritical,
   monthlyFixedCost,
@@ -159,6 +160,9 @@ export function submitDecision(
   let sim = { ...game.sim, cash: game.sim.cash - cost };
   sim = applyEffects(sim, outcome.effects);
   const afterImmediate = snapshot(sim);
+  const fixedBefore = monthlyFixedCost(game.sim);
+  const fixedAfter = monthlyFixedCost(sim);
+  const runwayBefore = computeRunway(game.sim);
 
   // 긴급 생존 카드는 시간을 흘리지 않고 즉시 적용하며, 연차의 개월 배분에는 들어가지 않는다.
   const isEmergency = ev.id === EMERGENCY_EVENT_ID;
@@ -186,7 +190,7 @@ export function submitDecision(
     eventTitle: ev.title,
     optionId: option.id,
     optionLabel: option.label,
-    stage: ev.stage,
+    stage: isEmergency ? game.stage : ev.stage,
     month: before.month,
     rationale: reasonText,
     dissent: dissent.trim(),
@@ -198,6 +202,10 @@ export function submitDecision(
     verdict: outcome.verdict,
     reason: ev.reason,
     cost,
+    fixedBefore,
+    fixedAfter,
+    runwayBefore,
+    runwayAfter: computeRunway(sim),
     notes,
   };
 

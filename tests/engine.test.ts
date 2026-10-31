@@ -649,3 +649,26 @@ describe('J. 일회성 비용·월 고정비 구분, 긴급 생존 카드', () =
     expect(reportToMarkdown(g, r)).toContain('인사이트');
   });
 });
+
+describe('K. 선택을 직접 짚는 인사이트', () => {
+  it('K1 실제 결정 기록(고정비·런웨이)으로 문장을 만든다', () => {
+    const g = play({ capital: 20000, mode: 'full' }, mostExpensive);
+    const r = generateReport(g);
+    expect(r.choiceInsights.length).toBeGreaterThan(0);
+    for (const i of r.choiceInsights) {
+      const d = g.decisions.find((x) => i.eyebrow === `${x.stage}년 차 · ${x.eventTitle}`);
+      expect(d, i.eyebrow).toBeDefined();
+      expect(i.text).toContain(d!.optionLabel);
+    }
+  });
+  it('K2 선택이 다르면 짚는 내용도 다르다', () => {
+    const a = generateReport(play({ capital: 20000, mode: 'full' }, cheapest)).choiceInsights.map((i) => i.text).join('|');
+    const b = generateReport(play({ capital: 20000, mode: 'full' }, mostExpensive)).choiceInsights.map((i) => i.text).join('|');
+    expect(a).not.toBe(b);
+  });
+  it('K3 옛 저장 기록(필드 없음)에서도 오류 없이 빈 목록', () => {
+    const g = play({ capital: 20000 }, cheapest);
+    const old = { ...g, decisions: g.decisions.map((d) => ({ ...d, fixedBefore: undefined, fixedAfter: undefined, runwayBefore: undefined, runwayAfter: undefined })) };
+    expect(generateReport(old).choiceInsights).toEqual([]);
+  });
+});
