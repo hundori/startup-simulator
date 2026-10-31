@@ -27,12 +27,12 @@ export const STAGE3_EVENTS: GameEvent[] = [
         outcomes: [
           {
             when: [gte('customers', 300), gte('quality', 50)],
-            effects: { cash: 15000, dilution: 25, morale: 4, flags: ['seriesA', 'aggressive-target'] },
+            effects: { cashMonths: 24, dilution: 25, morale: 4, flags: ['seriesA', 'aggressive-target'] },
             text: '대규모 자금을 확보했지만 높은 성장 목표가 걸려 있어 이후 의사결정의 자유가 줄었습니다.',
             verdict: 'ok',
           },
           {
-            effects: { cash: 8000, dilution: 30, morale: -3, flags: ['seriesA', 'aggressive-target'] },
+            effects: { cashMonths: 14, dilution: 30, morale: -3, flags: ['seriesA', 'aggressive-target'] },
             text: '지표 대비 높은 목표가 설정되어 이후 압박이 커졌고, 지분 희석도 컸습니다.',
             verdict: 'weak',
           },
@@ -46,12 +46,12 @@ export const STAGE3_EVENTS: GameEvent[] = [
         outcomes: [
           {
             when: [gte('reputation', 50), gte('customers', 200)],
-            effects: { cash: 10000, dilution: 18, morale: 5, reputation: 3, flags: ['seriesA'] },
+            effects: { cashMonths: 20, dilution: 18, morale: 5, reputation: 3, flags: ['seriesA'] },
             text: '협상으로 희석과 목표를 낮추고도 투자를 받았습니다. 지표가 협상력을 뒷받침했습니다.',
             verdict: 'strong',
           },
           {
-            effects: { cash: 5000, dilution: 20, morale: 1, flags: ['seriesA-small'] },
+            effects: { cashMonths: 10, dilution: 20, morale: 1, flags: ['seriesA-small'] },
             text: '협상 끝에 금액은 줄었지만 조건이 더 합리적이었습니다.',
             verdict: 'ok',
           },
@@ -84,12 +84,12 @@ export const STAGE3_EVENTS: GameEvent[] = [
         outcomes: [
           {
             when: [lte('runway', 4)],
-            effects: { cash: 3000, dilution: 20, morale: -4, flags: ['seriesA-late'] },
+            effects: { cashMonths: 6, dilution: 22, morale: -4, flags: ['seriesA-late'] },
             text: '시간을 끄는 사이 현금이 줄어 협상력을 잃었고, 나쁜 조건으로 마무리했습니다.',
             verdict: 'weak',
           },
           {
-            effects: { cash: 9000, dilution: 16, reputation: 1, flags: ['seriesA'] },
+            effects: { cashMonths: 18, dilution: 16, reputation: 1, flags: ['seriesA'] },
             text: '경쟁 제안 덕분에 더 나은 조건으로 투자를 받았습니다. 여유 있는 현금이 협상의 힘이 되었습니다.',
             verdict: 'strong',
           },

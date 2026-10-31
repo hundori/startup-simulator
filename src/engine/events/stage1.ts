@@ -105,24 +105,25 @@ export const STAGE1_EVENTS: GameEvent[] = [
       {
         id: 'seed',
         label: '엔젤·시드 투자 유치 시도',
-        description: '투자 자료(IR)를 만들어 투자자 미팅을 진행한다. 준비 비용과 시간이 든다.',
+        description:
+          '투자 자료(IR)를 만들어 투자자 미팅을 진행한다. 준비 비용이 들고, 유치 활동 중에는 대표의 시간이 제품에서 빠진다. 투자금은 보통 1년 6개월 이상 버틸 규모를 권장한다.',
         cost: 200,
         outcomes: [
           {
-            when: [gte('customers', 150), gte('quality', 50)],
-            effects: { cash: 7000, dilution: 15, reputation: 3, morale: 6, flags: ['seed'] },
-            text: '지표가 투자자의 기준을 넘어 시드 라운드를 마쳤습니다. 대신 지분 일부를 내주고 분기별 보고 의무가 생겼습니다.',
+            when: [gte('customers', 150), gte('quality', 50), gte('reputation', 40)],
+            effects: { cashMonths: 18, dilution: 15, acqBasePct: -0.03, reputation: 3, morale: 6, flags: ['seed'] },
+            text: '지표가 투자자의 기준을 넘어 18개월가량 버틸 금액으로 시드 라운드를 마쳤습니다. 대신 지분 15%를 내주고 분기별 보고 의무가 생겼으며, 유치에 매달린 몇 달 동안 신규 고객 유입은 둔해졌습니다.',
             verdict: 'strong',
           },
           {
             when: [gte('customers', 60)],
-            effects: { cash: 3000, dilution: 12, morale: 2, flags: ['seed-small'] },
-            text: '기대보다 작은 금액으로 브릿지 투자를 받았습니다. 숨통은 트였지만 여유는 크지 않습니다.',
+            effects: { cashMonths: 9, dilution: 10, acqBasePct: -0.03, morale: 2, flags: ['seed-small'] },
+            text: '기대보다 작은 금액(약 9개월치)으로 브릿지 투자를 받았습니다. 숨통은 트였지만 곧 다음 투자를 다시 준비해야 합니다.',
             verdict: 'ok',
           },
           {
-            effects: { morale: -6, flags: ['fundraise-failed'] },
-            text: '투자 설명을 여러 번 했지만 "아직 이르다"는 답만 돌아왔고, 준비하는 동안 제품은 멈춰 있었습니다.',
+            effects: { morale: -6, acqBasePct: -0.03, flags: ['fundraise-failed'] },
+            text: '투자 설명을 여러 번 했지만 "아직 이르다"는 답만 돌아왔고, 준비하는 동안 제품은 멈춰 있었습니다. 투자자는 매출보다 성장 속도와 검증된 가설을 봅니다.',
             verdict: 'weak',
           },
         ],

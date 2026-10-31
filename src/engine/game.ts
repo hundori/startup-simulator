@@ -44,7 +44,7 @@ export function createGame(input: SetupInput, opts: CreateOptions = {}): Game {
   const setup = normalizeSetup(input);
   const now = opts.now ?? new Date().toISOString();
   const base = hashString(`${setup.companyName}|${now}`);
-  const sim = createInitialState(setup);
+  const sim = { ...createInitialState(setup), pressure: setup.mode === 'class' ? 0.85 : 1 };
   return {
     version: 1,
     id: opts.id ?? `game-${base.toString(36)}`,

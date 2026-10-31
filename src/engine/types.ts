@@ -66,6 +66,8 @@ export interface SimState {
   debt: number;
   dilution: number;
   insolvencyMonths: number;
+  /** 시장 압력 배율(수업용 모드는 결정 횟수가 적어 낮춘다). 이전 저장본에는 없을 수 있다. */
+  pressure?: number;
   flags: string[];
 }
 
@@ -91,6 +93,7 @@ export type Cond =
 
 export interface Effects {
   cash?: number; // 현금 유입 (지출은 option.cost)
+  cashMonths?: number; // 현금 유입 = 개월 수 × 현재 월 고정비(인건비+운영비+마케팅+이자). 투자금을 '몇 개월 버틸 금액'으로 표현
   customersPct?: number;
   customersAdd?: number;
   quality?: number;

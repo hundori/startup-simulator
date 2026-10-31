@@ -19,8 +19,8 @@ export const INTEREST_RATE = 0.012;
 export const BANKRUPT_CASH_FLOOR_RATIO = 0.5;
 export const BANKRUPT_MONTHS = 2;
 // 시장 압력(교육용 가정): 시간이 지날수록 경쟁이 심해져 이탈이 늘고 고객 획득이 어려워진다.
-export const MARKET_CHURN_DRIFT = 0.0006;
-export const MARKET_ACQ_DECAY = 0.006;
+export const MARKET_CHURN_DRIFT = 0.0009;
+export const MARKET_ACQ_DECAY = 0.008;
 
 export function clamp(value: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, value));
@@ -39,6 +39,10 @@ export function payroll(s: SimState): number {
 }
 export function monthlyInterest(s: SimState): number {
   return Math.round(s.debt * INTEREST_RATE);
+}
+/** 월 고정비(매출과 무관하게 나가는 비용) */
+export function monthlyFixedCost(s: SimState): number {
+  return payroll(s) + s.overhead + s.marketingBudget + monthlyInterest(s);
 }
 export function projectedMonthlyProfit(s: SimState): number {
   const revenue = Math.round(s.customers * s.arpu);
@@ -195,8 +199,8 @@ export function advanceMonth(s: SimState): MonthResult {
     morale: r1(morale),
     reputation: r1(reputation),
     headcount,
-    churnRate: clamp(s.churnRate + MARKET_CHURN_DRIFT, 0.01, 0.5),
-    acqBase: Math.round(s.acqBase * (1 - MARKET_ACQ_DECAY) * 100) / 100,
+    churnRate: clamp(s.churnRate + MARKET_CHURN_DRIFT * (s.pressure ?? 1), 0.01, 0.5),
+    acqBase: Math.round(s.acqBase * (1 - MARKET_ACQ_DECAY * (s.pressure ?? 1)) * 100) / 100,
     insolvencyMonths: cash < 0 ? s.insolvencyMonths + 1 : 0,
   };
   const bankrupt = isBankrupt(next);
@@ -230,7 +234,7 @@ export function applyEffects(s: SimState, e: Effects): SimState {
 
   return {
     ...s,
-    cash: s.cash + (e.cash ?? 0),
+    cash: s.cash + (e.cash ?? 0) + Math.round((e.cashMonths ?? 0) * monthlyFixedCost(s)),
     customers,
     quality: r1(clamp(s.quality + (e.quality ?? 0), 0, 100)),
     morale: r1(clamp(s.morale + (e.morale ?? 0), 0, 100)),

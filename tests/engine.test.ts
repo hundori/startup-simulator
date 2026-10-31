@@ -328,7 +328,7 @@ describe('G. 결정·흐름', () => {
     expect(view).not.toContain('"text":');
   });
   it('G4 같은 대안도 회사 상태에 따라 결과가 달라진다', () => {
-    const strong = atEvent('e02-runway', { customers: 200, quality: 60 });
+    const strong = atEvent('e02-runway', { customers: 200, quality: 60, reputation: 50 });
     const weak = atEvent('e02-runway', { customers: 20, quality: 40 });
     const a = submitDecision(strong, 'seed', '지표가 충분하다고 판단해 투자 유치를 시도하기로 했다.');
     const b = submitDecision(weak, 'seed', '지표가 부족하지만 일단 투자 유치를 시도하기로 했다.');
@@ -336,6 +336,17 @@ describe('G. 결정·흐름', () => {
     expect(a.game.decisions[0].verdict).toBe('strong');
     expect(b.game.decisions[0].verdict).toBe('weak');
     expect(a.game.decisions[0].afterImmediate.cash).toBeGreaterThan(b.game.decisions[0].afterImmediate.cash);
+  });
+  it('G4b 투자금(cashMonths)은 회사의 월 고정비 규모에 비례한다', () => {
+    const small = atEvent('e02-runway', { customers: 200, quality: 60, reputation: 50, marketingBudget: 100 });
+    const big = atEvent('e02-runway', { customers: 200, quality: 60, reputation: 50, marketingBudget: 900 });
+    const a = submitDecision(small, 'seed', '지표가 충분하다고 판단해 투자 유치를 시도하기로 했다.');
+    const b = submitDecision(big, 'seed', '지표가 충분하다고 판단해 투자 유치를 시도하기로 했다.');
+    if (!a.ok || !b.ok) throw new Error('결정 실패');
+    const gainA = a.game.decisions[0].afterImmediate.cash - a.game.decisions[0].before.cash;
+    const gainB = b.game.decisions[0].afterImmediate.cash - b.game.decisions[0].before.cash;
+    expect(gainB).toBeGreaterThan(gainA);
+    expect(a.game.sim.dilution).toBeGreaterThanOrEqual(15);
   });
   it('G5 비용이 보유 현금보다 큰 대안은 거부된다', () => {
     const g = atEvent('e01-market-need', { cash: 100 });
