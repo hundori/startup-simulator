@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import type { Game, SetupInput } from '@/engine';
 import {
   DISCLAIMER_SHORT,
@@ -52,6 +52,13 @@ export default function GameApp() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [started, setStarted] = useState(false);
   const [teacher, setTeacher] = useState(false);
+  // 교수자 취합 화면은 주소 끝에 #teacher 를 붙여 연다 (메뉴에는 노출하지 않음)
+  useEffect(() => {
+    const f = () => setTeacher(window.location.hash === '#teacher');
+    f();
+    window.addEventListener('hashchange', f);
+    return () => window.removeEventListener('hashchange', f);
+  }, []);
 
   const commit = useCallback((next: Game) => {
     setGame(next);
@@ -96,12 +103,12 @@ export default function GameApp() {
 
   let body: React.ReactNode;
   if (teacher) {
-    body = <TeacherDashboard onBack={() => setTeacher(false)} />;
+    body = <TeacherDashboard onBack={() => { window.location.hash = ''; setTeacher(false); }} />;
   } else if (!game) {
     body = started || notice ? (
       <SetupScreen onStart={start} notice={notice} />
     ) : (
-      <LandingScreen onStart={() => { setStarted(true); window.scrollTo({ top: 0 }); }} onTeacher={() => setTeacher(true)} />
+      <LandingScreen onStart={() => { setStarted(true); window.scrollTo({ top: 0 }); }} />
     );
   } else if (game.phase === 'intro') {
     body = <IntroScreen game={game} onBegin={() => commit(beginSimulation(game))} />;
