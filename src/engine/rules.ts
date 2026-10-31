@@ -297,7 +297,7 @@ export function applyEffects(s: SimState, e: Effects): SimState {
     capPerHead: Math.max(1, Math.round(s.capPerHead * (1 + (e.capPerHeadPct ?? 0)))),
     aiLevel: clamp((s.aiLevel ?? 0) + (e.aiLevel ?? 0), 0, 1),
     tam: s.tam ? Math.max(10, Math.round(s.tam * (1 + (e.tamPct ?? 0)))) : s.tam,
-    debt: Math.max(0, s.debt + scaleMoney(s, e.debt ?? 0)),
+    debt: Math.max(0, s.debt + scaleMoney(s, e.debt ?? 0) + Math.round((e.debtMonths ?? 0) * monthlyFixedCost(s))),
     dilution: clamp(s.dilution + (e.dilution ?? 0), 0, 90),
     flags,
     // 매출 표시는 다음 월 계산 전까지 현재 고객 수 기준으로 갱신

@@ -67,17 +67,17 @@ export const EMERGENCY_EVENT: GameEvent = {
     {
       id: 'survival-mode',
       label: '생존 모드: 마케팅 중단과 운영비 최대 절감',
-      description: '신규 고객 확보를 멈추고 운영비를 줄여 월 고정비를 바닥까지 낮춘다.',
+      description: '신규 고객 확보를 멈추고 운영비를 줄여 월 고정비를 바닥까지 낮추고, 쓰지 않는 자산·구독을 정리해 현금을 조금 확보한다.',
       outcomes: [
         out({
           when: [gte('quality', 50)],
-          effects: { marketingBudget: -100000, overhead: -60, acqBasePct: -0.2, morale: -4 },
-          text: '마케팅을 끊고 운영비를 줄여 고정비가 크게 내려갔습니다. 신규 유입이 줄었지만 기존 고객이 남아 있어 현금 소진 속도를 늦췄습니다.',
+          effects: { cashMonths: 2.5, marketingBudget: -100000, overhead: -60, acqBasePct: -0.2, morale: -4 },
+          text: '마케팅을 끊고 운영비를 줄여 고정비가 크게 내려갔고, 쓰지 않는 장비·구독을 정리해 현금도 일부 확보했습니다. 신규 유입이 줄었지만 기존 고객이 남아 있어 현금 소진 속도를 늦췄습니다.',
           verdict: 'ok',
         }),
         out({
-          effects: { marketingBudget: -100000, overhead: -60, acqBasePct: -0.3, customersPct: -0.05, quality: -3, morale: -7 },
-          text: '품질이 낮은 상태에서 비용을 줄이자 고객 이탈이 겹쳤습니다. 고정비는 줄었지만 매출도 함께 줄었습니다.',
+          effects: { cashMonths: 1.2, marketingBudget: -100000, overhead: -60, acqBasePct: -0.3, customersPct: -0.05, quality: -3, morale: -7 },
+          text: '품질이 낮은 상태에서 비용을 줄이자 고객 이탈이 겹쳤습니다. 고정비는 줄고 정리로 약간의 현금이 생겼지만 매출도 함께 줄었습니다.',
           verdict: 'weak',
         }),
       ],
@@ -89,12 +89,12 @@ export const EMERGENCY_EVENT: GameEvent = {
       outcomes: [
         out({
           when: [gte('reputation', 40)],
-          effects: { cash: 1000, debt: 1000, morale: 1 },
-          text: '약 1,000만원(표준 규모 기준)을 빌려 급한 불을 껐습니다. 이자가 매달 나가므로 고정비는 늘었고, 갚지 못하면 개인 관계에도 상처가 남습니다.',
+          effects: { cashMonths: 4, debtMonths: 4, morale: 1 },
+          text: '약 4개월치 고정비를 빌려 급한 불을 껐습니다. 이자가 매달 나가므로 고정비는 늘었고, 갚지 못하면 개인 관계에도 상처가 남습니다.',
           verdict: 'ok',
         }),
         out({
-          effects: { cash: 600, debt: 600, morale: -2 },
+          effects: { cashMonths: 2, debtMonths: 2, morale: -2 },
           text: '신뢰가 충분하지 않아 빌릴 수 있는 금액이 작았습니다. 시간은 벌었지만 부채와 이자 부담이 생겼습니다.',
           verdict: 'weak',
         }),
@@ -107,12 +107,12 @@ export const EMERGENCY_EVENT: GameEvent = {
       outcomes: [
         out({
           when: [gte('customers', 150), gte('quality', 50)],
-          effects: { cash: 900, arpuPct: -0.1, churnRate: -0.01 },
+          effects: { cashMonths: 3.5, arpuPct: -0.1, churnRate: -0.01 },
           text: '만족한 고객이 선결제에 응했습니다. 현금은 들어왔고 이탈도 줄었지만, 할인 때문에 고객당 매출이 낮아졌습니다.',
           verdict: 'ok',
         }),
         out({
-          effects: { cash: 400, arpuPct: -0.1, reputation: -2 },
+          effects: { cashMonths: 1.5, arpuPct: -0.1, reputation: -2 },
           text: '선결제에 응한 고객이 적어 현금은 조금만 들어왔고, 할인만 남았습니다. 돈이 급하다는 신호가 고객에게 알려져 평판이 흔들렸습니다.',
           verdict: 'weak',
         }),

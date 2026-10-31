@@ -111,6 +111,7 @@ export type Cond =
 export interface Effects {
   cash?: number; // 현금 유입 (지출은 option.cost)
   cashMonths?: number; // 현금 유입 = 개월 수 × 현재 월 고정비(인건비+운영비+마케팅+이자). 투자금을 '몇 개월 버틸 금액'으로 표현
+  debtMonths?: number; // 부채 증가 = 개월 수 × 현재 월 고정비(차입을 '몇 개월 버틸 금액'으로 표현)
   customersPct?: number;
   customersAdd?: number;
   quality?: number;
