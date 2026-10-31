@@ -7,6 +7,7 @@ import {
   formatSigned,
   formatSignedMoney,
   aiAutomated,
+  monthlyFixedCost,
   monthlyInterest,
   payroll,
   previewRunway,
@@ -42,9 +43,10 @@ function fmtMonths(m: number | null): string {
 }
 
 /** 고른 대안의 비용만 반영한 런웨이. 채용·매출 변화 같은 결과는 결정 전에는 보여 주지 않는다. */
-function RunwayPreview({ game, cost }: { game: Game; cost: number }) {
+function RunwayPreview({ game, cost, fixedDelta }: { game: Game; cost: number; fixedDelta: number }) {
   const now = computeRunway(game.sim);
-  const after = previewRunway(game.sim, cost);
+  const after = previewRunway(game.sim, cost, fixedDelta);
+  const fixedNow = monthlyFixedCost(game.sim);
   const danger = after.months !== null && after.months < 3;
   const caution = after.months !== null && after.months >= 3 && after.months < 6;
   return (
@@ -57,9 +59,26 @@ function RunwayPreview({ game, cost }: { game: Game; cost: number }) {
       <p className="num mt-0.5 font-semibold">
         {fmtMonths(now)} → <span className={danger ? 'text-loss' : caution ? 'text-warn' : 'text-ink'}>{fmtMonths(after.months)}</span>
       </p>
-      <p className="num mt-0.5 text-xs text-muted">
-        현금 {formatMoney(game.sim.cash)} → {formatMoney(after.cashAfter)} ({cost > 0 ? `비용 ${formatMoney(cost)}` : "추가 비용 없음"})
-      </p>
+      <dl className="num mt-2 space-y-1 text-xs">
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted">일회성 비용 (한 번)</dt>
+          <dd className="font-semibold">{cost > 0 ? `−${formatMoney(cost)}` : '없음'}</dd>
+        </div>
+        <div className="flex justify-between gap-2">
+          <dt className="text-muted">월 고정비 (매달)</dt>
+          <dd className={`font-semibold ${fixedDelta > 0 ? 'text-loss' : fixedDelta < 0 ? 'text-gain' : ''}`}>
+            {fixedDelta === 0 ? '변동 없음' : `${fixedDelta > 0 ? '+' : '−'}${formatMoney(Math.abs(fixedDelta))}`}
+          </dd>
+        </div>
+        <div className="flex justify-between gap-2 text-muted">
+          <dt>현금</dt>
+          <dd>{formatMoney(game.sim.cash)} → {formatMoney(after.cashAfter)}</dd>
+        </div>
+        <div className="flex justify-between gap-2 text-muted">
+          <dt>월 고정비 합계</dt>
+          <dd>{formatMoney(fixedNow)} → {formatMoney(fixedNow + fixedDelta)}</dd>
+        </div>
+      </dl>
       {danger ? (
         <div className="mt-2">
           <Badge tone="danger">경고 · 런웨이 3개월 미만</Badge>
@@ -69,7 +88,7 @@ function RunwayPreview({ game, cost }: { game: Game; cost: number }) {
           <Badge tone="warn">주의 · 런웨이 6개월 미만</Badge>
         </div>
       ) : null}
-      <p className="mt-2 text-xs text-muted">비용만 반영한 추정입니다. 채용·매출 변화 같은 결과는 결정 후 공개됩니다.</p>
+      <p className="mt-2 text-xs text-muted">일회성 비용과 월 고정비 변동만 반영한 추정입니다(결과가 갈리면 가장 불리한 쪽). 매출·고객 변화는 결정 후 공개됩니다.</p>
     </div>
   );
 }
@@ -154,7 +173,7 @@ function deltaClass(v: number): string {
   return 'text-muted';
 }
 
-export default function StatusPanel({ game, previewCost = null }: { game: Game; previewCost?: number | null }) {
+export default function StatusPanel({ game, previewCost = null }: { game: Game; previewCost?: { cost: number; fixedDelta: number } | null }) {
   const { sim } = game;
   const prev: MetricSnapshot | null = game.decisions.length
     ? game.decisions[game.decisions.length - 1].before
@@ -231,7 +250,7 @@ export default function StatusPanel({ game, previewCost = null }: { game: Game; 
           <h2 className="font-sans text-sm font-bold">경영 현황</h2>
           <Runway game={game} />
         </div>
-        {previewCost !== null ? <RunwayPreview game={game} cost={previewCost} /> : null}
+        {previewCost !== null ? <RunwayPreview game={game} cost={previewCost.cost} fixedDelta={previewCost.fixedDelta} /> : null}
 
         <dl className="grid grid-cols-2 divide-x divide-y divide-line border-b border-line lg:grid-cols-1 lg:divide-x-0">
           {items.map((it) => (

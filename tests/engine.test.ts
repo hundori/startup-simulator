@@ -575,3 +575,77 @@ describe('시장 규모·성장률·단위경제', () => {
     expect(b.game.decisions[0].verdict).toBe('ok');
   });
 });
+
+import { EMERGENCY_EVENT_ID, fixedCostDelta, monthlyFixedCost as fixedCostOf } from '../src/engine';
+
+describe('J. 일회성 비용·월 고정비 구분, 긴급 생존 카드', () => {
+  function atEvent(eventId: string, over: Partial<Game['sim']> = {}): Game {
+    const g = beginSimulation(newGame());
+    return { ...g, plan: [eventId], planIndex: 0, sim: { ...g.sim, ...over } };
+  }
+
+  it('J1 채용 대안은 월 고정비가 늘고, 외주·절감 대안은 방향이 다르다', () => {
+    const g = atEvent('e07-hiring', { cash: 30000, headcount: 3 });
+    const ev = resolveEvent(g)!;
+    const hire = ev.options.filter((o) => o.fixedDelta.max > 0);
+    expect(hire.length).toBeGreaterThan(0);
+    for (const o of hire) expect(o.fixedDelta.min).toBeGreaterThan(0);
+    // 월 고정비 변동은 실제 결과 적용값과 일치한다
+    const raw = getEvent('e07-hiring').options.find((o) => o.id === hire[0].id)!;
+    const after = applyEffects(g.sim, raw.outcomes[0].effects);
+    const d = fixedCostOf(after) - fixedCostOf(g.sim);
+    expect(d).toBeGreaterThanOrEqual(fixedCostDelta(g, raw).min);
+    expect(d).toBeLessThanOrEqual(fixedCostDelta(g, raw).max);
+  });
+
+  it('J2 예상 런웨이는 월 고정비 증가분만큼 짧아진다', () => {
+    const s = baseSim({ cash: 6000 });
+    const a = previewRunway(s, 0, 0).months!;
+    const b = previewRunway(s, 0, 250).months!;
+    expect(b).toBeLessThan(a);
+    // 같은 금액이라도 한 번 나가는 비용보다 매달 나가는 비용이 훨씬 아프다
+    const once = previewRunway(s, 300, 0).months!;
+    const monthly = previewRunway(s, 0, 300).months!;
+    expect(monthly).toBeLessThan(once);
+  });
+
+  function critical(): Game {
+    const g = beginSimulation(newGame());
+    const sim = { ...g.sim, cash: 300 };
+    return { ...g, plan: ['e01-market-need', 'e02-pricing'], planIndex: 0, phase: 'outcome', sim };
+  }
+
+  it('J3 런웨이 1개월 미만이면 다음 이벤트 앞에 긴급 카드가 한 번 끼어든다', () => {
+    const next = continueFromOutcome(critical());
+    expect(next.plan[next.planIndex]).toBe(EMERGENCY_EVENT_ID);
+    const ev = resolveEvent(next)!;
+    expect(ev.emergency).toBe(true);
+    expect(ev.options.length).toBeGreaterThanOrEqual(5);
+    expect(ev.total).toBe(2); // 연차 이벤트 수에는 포함되지 않는다
+  });
+
+  it('J4 긴급 카드는 시간을 흘리지 않고, 쓴 뒤에는 다시 열리지 않는다', () => {
+    const g = continueFromOutcome(critical());
+    const r = submitDecision(g, 'distress-equity', '지분을 넘기더라도 지금은 살아남는 것이 우선이라고 팀이 합의했다.');
+    if (!r.ok) throw new Error(r.error);
+    expect(r.game.lastOutcome?.monthsElapsed).toBe(0);
+    expect(r.game.sim.flags).toContain('emergency-used');
+    expect(r.game.sim.cash).toBeGreaterThan(g.sim.cash);
+    const after = continueFromOutcome({ ...r.game, sim: { ...r.game.sim, cash: 50 } });
+    expect(after.plan[after.planIndex]).not.toBe(EMERGENCY_EVENT_ID);
+  });
+
+  it('J5 런웨이가 충분하면 긴급 카드는 열리지 않는다', () => {
+    const g = { ...critical(), sim: { ...critical().sim, cash: 100000 } };
+    const next = continueFromOutcome(g);
+    expect(next.plan).not.toContain(EMERGENCY_EVENT_ID);
+  });
+
+  it('J6 보고서에 인사이트와 원칙이 들어 있다', () => {
+    const g = play({ capital: 20000 }, cheapest);
+    const r = generateReport(g);
+    expect(r.insights.length).toBeGreaterThanOrEqual(5);
+    expect(r.principles.length).toBe(5);
+    expect(reportToMarkdown(g, r)).toContain('인사이트');
+  });
+});

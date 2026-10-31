@@ -10,7 +10,7 @@ import type {
   Stage,
 } from './types';
 import { MIN_RATIONALE_LENGTH } from './constants';
-import { getEvent } from './events';
+import { EMERGENCY_EVENT_ID, getEvent } from './events';
 import { hashString } from './rng';
 import { fillText, shortIdea } from './josa';
 import {
@@ -18,6 +18,8 @@ import {
   applyEffects,
   scaleMoney,
   evaluateOption,
+  isRunwayCritical,
+  monthlyFixedCost,
   monthRecord,
   monthsAllocation,
   pickOutcome,
@@ -84,6 +86,13 @@ function visibleOptions(game: Game, options: EventOption[]): EventOption[] {
   return options.filter((o) => !o.onlyFor || o.onlyFor.includes(game.sim.businessType));
 }
 
+/** 결정 뒤 매달 나가는 고정비(인건비+운영비+마케팅+이자)가 얼마나 바뀌는지. 결과 조건과 무관하게 가능한 범위만 알려 준다. */
+export function fixedCostDelta(game: Game, option: EventOption): { min: number; max: number } {
+  const base = monthlyFixedCost(game.sim);
+  const ds = option.outcomes.map((o) => monthlyFixedCost(applyEffects(game.sim, o.effects)) - base);
+  return { min: Math.min(...ds), max: Math.max(...ds) };
+}
+
 /** 선택 전 UI에 전달할 대안. outcomes·effects는 포함하지 않는다. */
 export function toPublicOption(game: Game, option: EventOption): PublicOption {
   const { available, reasons } = evaluateOption(game.sim, option);
@@ -92,6 +101,7 @@ export function toPublicOption(game: Game, option: EventOption): PublicOption {
     label: fill(option.label, game),
     description: fill(option.description, game),
     cost: scaleMoney(game.sim, option.cost ?? 0),
+    fixedDelta: fixedCostDelta(game, option),
     minHeadcount: option.minHeadcount ?? null,
     available,
     reasons,
@@ -103,17 +113,21 @@ export function resolveEvent(game: Game): ResolvedEvent | null {
   const id = game.plan[game.planIndex];
   if (!id) return null;
   const ev = getEvent(id);
+  const emergency = ev.id === EMERGENCY_EVENT_ID;
+  const real = game.plan.filter((p) => p !== EMERGENCY_EVENT_ID);
+  const realIndex = game.plan.slice(0, game.planIndex).filter((p) => p !== EMERGENCY_EVENT_ID).length;
   return {
     id: ev.id,
-    stage: ev.stage,
+    emergency,
+    stage: emergency ? game.stage : ev.stage,
     title: ev.title,
     reason: ev.reason,
     situation: fill(ev.situation, game),
     context: ev.contextByType?.[game.sim.businessType] ? fill(ev.contextByType[game.sim.businessType] as string, game) : null,
     discussionPrompts: ev.discussionPrompts.map((p) => fill(p, game)),
     options: visibleOptions(game, ev.options).map((o) => toPublicOption(game, o)),
-    index: game.planIndex,
-    total: game.plan.length,
+    index: realIndex,
+    total: real.length,
   };
 }
 
@@ -146,7 +160,11 @@ export function submitDecision(
   sim = applyEffects(sim, outcome.effects);
   const afterImmediate = snapshot(sim);
 
-  const months = monthsAllocation(game.plan.length)[game.planIndex] ?? 12;
+  // 긴급 생존 카드는 시간을 흘리지 않고 즉시 적용하며, 연차의 개월 배분에는 들어가지 않는다.
+  const isEmergency = ev.id === EMERGENCY_EVENT_ID;
+  const realPlan = game.plan.filter((p) => p !== EMERGENCY_EVENT_ID);
+  const realIndex = game.plan.slice(0, game.planIndex).filter((p) => p !== EMERGENCY_EVENT_ID).length;
+  const months = isEmergency ? 0 : (monthsAllocation(realPlan.length)[realIndex] ?? 12);
   const history = [...game.history];
   const notes: string[] = [];
   let bankrupt = false;
@@ -198,8 +216,8 @@ export function submitDecision(
   };
 }
 
-/** 결과 화면에서 "계속"을 눌렀을 때 */
-export function continueFromOutcome(game: Game, now = new Date().toISOString()): Game {
+/** 다음 이벤트·연차로 넘어간다(긴급 카드 삽입 전) */
+function continueRaw(game: Game, now: string): Game {
   if (game.phase !== 'outcome') return game;
   if (game.status === 'bankrupt') return { ...game, phase: 'finished', updatedAt: now };
 
@@ -212,6 +230,22 @@ export function continueFromOutcome(game: Game, now = new Date().toISOString()):
   const nextStage = (game.stage + 1) as Stage;
   const plan = planStageEvents({ sim: game.sim, mode: game.setup.mode, seed: game.seed }, nextStage);
   return { ...game, stage: nextStage, plan, planIndex: 0, phase: 'event', updatedAt: now };
+}
+
+/** 런웨이가 1개월 미만이면 다음 이벤트 앞에 긴급 생존 카드를 끼워 넣는다(게임당 한 번). */
+function withEmergency(game: Game): Game {
+  if (game.phase !== 'event' || game.status !== 'running') return game;
+  if (game.plan[game.planIndex] === EMERGENCY_EVENT_ID) return game;
+  if (game.sim.flags.includes('emergency-used')) return game;
+  if (!isRunwayCritical(game.sim)) return game;
+  const plan = [...game.plan.slice(0, game.planIndex), EMERGENCY_EVENT_ID, ...game.plan.slice(game.planIndex)];
+  return { ...game, plan };
+}
+
+/** 결과 화면에서 "계속"을 눌렀을 때 */
+export function continueFromOutcome(game: Game, now = new Date().toISOString()): Game {
+  if (game.phase !== 'outcome') return game;
+  return withEmergency(continueRaw(game, now));
 }
 
 /** 테스트·밸런스 점검용 자동 진행 */

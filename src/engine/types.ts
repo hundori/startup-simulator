@@ -124,6 +124,7 @@ export interface Effects {
   acqBasePct?: number;
   cogsRatio?: number;
   capPerHeadPct?: number;
+  salaryPct?: number; // 1인당 월급 증감(무급여 전환·급여 삭감 등)
   aiLevel?: number; // AI 도입 정도 증감(0~1 범위로 제한)
   tamPct?: number; // 겨냥 시장 규모 증감(틈새 집중은 줄이고, 새 시장 진출은 늘린다)
   debt?: number;
@@ -174,7 +175,8 @@ export interface PublicOption {
   id: string;
   label: string;
   description: string;
-  cost: number;
+  cost: number; // 선택 즉시 한 번만 나가는 비용(일회성)
+  fixedDelta: { min: number; max: number }; // 결정 후 매달 나가는 고정비의 변화(결과별 최솟값·최댓값)
   minHeadcount: number | null;
   available: boolean;
   reasons: string[];
@@ -189,6 +191,7 @@ export interface ResolvedEvent {
   context: string | null;
   discussionPrompts: string[];
   options: PublicOption[];
+  emergency?: boolean; // 런웨이 1개월 미만에서 열리는 긴급 생존 카드
   index: number; // 이번 연차 내 순서 (0부터)
   total: number; // 이번 연차 이벤트 수
 }

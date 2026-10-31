@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { Game, ResolvedEvent } from '@/engine';
-import { MIN_RATIONALE_LENGTH, explainEvent, formatMoney, reasonLabel, shortIdea } from '@/engine';
+import { MIN_RATIONALE_LENGTH, computeRunway, explainEvent, formatFixedDelta, formatMoney, reasonLabel, shortIdea } from '@/engine';
 import Assumptions from './Assumptions';
 import Choice from './Choice';
 import { Badge, Button, Callout, STAGE_LABEL } from './ui';
@@ -42,6 +42,31 @@ export function clearDraft(gameId: string, eventId: string) {
   }
 }
 
+function EmergencyPopup({ runway, cash, onClose }: { runway: number | null; cash: number; onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 grid place-items-center bg-ink/60 p-4 print:hidden">
+      <div role="alertdialog" aria-modal="true" aria-labelledby="emg-title" className="w-full max-w-md rounded-lg border-2 border-loss bg-surface p-6 shadow-2xl">
+        <p className="text-xs font-bold tracking-wide text-loss">긴급 생존 카드</p>
+        <h2 id="emg-title" className="mt-1 text-xl font-bold leading-snug">런웨이가 1개월도 남지 않았습니다</h2>
+        <p className="num mt-3 text-sm">
+          현금 {formatMoney(cash)} · 지금 속도로는 <strong className="text-loss">{runway === null ? '—' : runway.toFixed(1)}개월</strong> 뒤 바닥납니다.
+        </p>
+        <p className="mt-2 text-sm text-muted">
+          정상적인 성장 전략을 논의할 시간이 아닙니다. 다음 화면에서 무급여 전환, 지분 헐값 매각 같은 긴급 생존 선택지를 두고 팀이 결정하세요. 이 카드는 한 번만 열리고, 결정해도 시간은 흐르지 않습니다.
+        </p>
+        <button
+          type="button"
+          autoFocus
+          onClick={onClose}
+          className="mt-5 inline-flex min-h-11 w-full items-center justify-center rounded-md bg-loss px-4 text-sm font-semibold text-white"
+        >
+          긴급 선택지 보기
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /** 부모에서 key={game.id + event.id}로 마운트해 이벤트마다 새 초안으로 시작한다. */
 export default function EventScreen({
   game,
@@ -52,7 +77,7 @@ export default function EventScreen({
   game: Game;
   event: ResolvedEvent;
   onSubmit: (optionId: string, rationale: string, dissent: string) => string | null;
-  onPreview?: (cost: number | null) => void;
+  onPreview?: (p: { cost: number; fixedDelta: number } | null) => void;
 }) {
   const key = draftKey(game.id, event.id);
   const [draft, setDraft] = useState<Draft>(() => {
@@ -75,11 +100,15 @@ export default function EventScreen({
     });
   };
 
-  const selectedCost = event.options.find((o) => o.id === draft.optionId)?.cost ?? null;
+  const selected = event.options.find((o) => o.id === draft.optionId);
+  const selectedCost = selected ? selected.cost : null;
+  // 결과가 갈릴 때는 월 고정비가 가장 크게 늘어나는 쪽(가장 불리한 쪽)으로 미리 보여 준다.
+  const selectedFixed = selected ? selected.fixedDelta.max : 0;
   useEffect(() => {
-    onPreview?.(selectedCost);
+    onPreview?.(selectedCost === null ? null : { cost: selectedCost, fixedDelta: selectedFixed });
     return () => onPreview?.(null);
-  }, [selectedCost, onPreview]);
+  }, [selectedCost, selectedFixed, onPreview]);
+  const [ack, setAck] = useState(!event.emergency);
 
   const len = draft.rationale.trim().length;
   const enough = len >= MIN_RATIONALE_LENGTH;
@@ -95,12 +124,17 @@ export default function EventScreen({
 
   return (
     <form onSubmit={submit} className="max-w-2xl space-y-6">
+      {!ack ? <EmergencyPopup runway={computeRunway(game.sim)} cash={game.sim.cash} onClose={() => setAck(true)} /> : null}
       <header>
         <p className="flex flex-wrap items-center gap-2 text-sm text-muted">
           <span>{STAGE_LABEL[event.stage]}</span>
-          <span className="num">
-            · 이벤트 {event.index + 1} / {event.total}
-          </span>
+          {event.emergency ? (
+            <Badge tone="danger">긴급 · 연차 이벤트 밖에서 열린 카드</Badge>
+          ) : (
+            <span className="num">
+              · 이벤트 {event.index + 1} / {event.total}
+            </span>
+          )}
           <Badge tone="accent">{reasonLabel(event.reason)}</Badge>
         </p>
         <h1 className="mt-3 text-2xl font-bold sm:text-3xl">{event.title}</h1>
@@ -126,7 +160,9 @@ export default function EventScreen({
 
       <fieldset>
         <legend className="mb-1 text-lg font-semibold">우리의 결정</legend>
-        <p className="mb-3 text-sm text-muted">각 대안의 결과는 결정한 뒤에 공개됩니다. 비용은 즉시 현금에서 빠집니다.</p>
+        <p className="mb-3 text-sm text-muted">
+          각 대안의 결과는 결정한 뒤에 공개됩니다. <strong>일회성 비용</strong>은 지금 한 번 현금에서 빠지고, <strong>월 고정비 변동</strong>은 앞으로 매달 반복됩니다.
+        </p>
         <div className="space-y-2">
           {event.options.map((o, idx) => (
             <Choice
@@ -138,9 +174,13 @@ export default function EventScreen({
               title={`${String.fromCharCode(65 + idx)}. ${o.label}`}
             >
               <span className="block text-sm text-muted">{o.description}</span>
-              <span className="num mt-1 block text-sm">
-                {o.cost > 0 ? `비용 ${formatMoney(o.cost)}` : '추가 비용 없음'}
-                {o.minHeadcount ? ` · 최소 ${o.minHeadcount}명 필요` : ''}
+              <span className="num mt-1 flex flex-wrap gap-x-4 gap-y-1 text-sm">
+                <span>일회성 비용 {o.cost > 0 ? formatMoney(o.cost) : '없음'}</span>
+                <span className={o.fixedDelta.max > 0 ? 'font-semibold text-loss' : o.fixedDelta.min < 0 ? 'font-semibold text-gain' : ''}>
+                  월 고정비 {formatFixedDelta(o.fixedDelta)}
+                  {o.fixedDelta.max !== 0 || o.fixedDelta.min !== 0 ? ' /월' : ''}
+                </span>
+                {o.minHeadcount ? <span>최소 {o.minHeadcount}명 필요</span> : null}
               </span>
               {!o.available && o.reasons.length > 0 ? (
                 <span className="mt-1 block text-sm font-semibold text-loss">선택 불가: {o.reasons.join(' / ')}</span>

@@ -269,7 +269,7 @@ export function applyEffects(s: SimState, e: Effects): SimState {
   customers = Math.max(0, Math.round(customers));
 
   let headcount = s.headcount;
-  let avgSalary = s.avgSalary;
+  let avgSalary = s.avgSalary * (1 + (e.salaryPct ?? 0));
   if (e.headcount && e.headcount > 0) {
     avgSalary = (avgSalary * headcount + HIRE_SALARY * scaleOf(s) * e.headcount) / (headcount + e.headcount);
     headcount += e.headcount;
@@ -341,12 +341,26 @@ export function monthsAllocation(eventCount: number): number[] {
   });
 }
 
-/** 대안을 고르면 즉시 나가는 비용만 반영한 런웨이 추정. 채용·매출 변화 같은 결과는 결정 전에는 알 수 없으므로 넣지 않는다. */
-export function previewRunway(s: SimState, cost: number): { cashAfter: number; months: number | null } {
+/**
+ * 대안을 고르면 즉시 나가는 일회성 비용과, 매달 늘거나 줄어드는 고정비(fixedDelta)만 반영한 런웨이 추정.
+ * 매출·고객 변화 같은 결과는 결정 전에는 알 수 없으므로 넣지 않는다.
+ */
+export function previewRunway(
+  s: SimState,
+  cost: number,
+  fixedDelta = 0,
+): { cashAfter: number; months: number | null; monthlyLoss: number } {
   const cashAfter = s.cash - cost;
-  if (cashAfter <= 0) return { cashAfter, months: 0 };
-  const profit = projectedMonthlyProfit(s);
-  return { cashAfter, months: profit >= 0 ? null : cashAfter / -profit };
+  const profit = projectedMonthlyProfit(s) - fixedDelta;
+  if (cashAfter <= 0) return { cashAfter, months: 0, monthlyLoss: Math.max(0, -profit) };
+  return { cashAfter, months: profit >= 0 ? null : cashAfter / -profit, monthlyLoss: Math.max(0, -profit) };
+}
+
+/** 긴급 생존 카드를 여는 기준: 지금 속도로 한 달도 못 버티는가 */
+export const EMERGENCY_RUNWAY_MONTHS = 1;
+export function isRunwayCritical(s: SimState): boolean {
+  const r = computeRunway(s);
+  return r !== null && r < EMERGENCY_RUNWAY_MONTHS;
 }
 
 /** 단위경제 추정: 고객 1명 확보 비용(마케팅비 ÷ 월 신규 고객), 고객 생애 가치(월 이익 ÷ 이탈률), 회수 개월 */

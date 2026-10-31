@@ -1,7 +1,6 @@
 'use client';
 
 import type { Game } from '@/engine';
-import SubmitPanel from './SubmitPanel';
 import AdvisorPicker from './AdvisorPicker';
 import { DISCLAIMER_LONG, explainReport, generateReport, monthToLabel, reportToMarkdown } from '@/engine';
 import Assumptions from './Assumptions';
@@ -124,7 +123,33 @@ export default function FinalReport({ game, onRestart }: { game: Game; onRestart
 
       <AdvisorPicker game={game} />
 
-      <SubmitPanel game={game} />
+      <section aria-labelledby="ins-h">
+        <h2 id="ins-h" className="mb-1 text-lg font-semibold">이 시뮬레이션에서 얻은 인사이트</h2>
+        <p className="mb-3 text-sm text-muted">우리 팀의 3년 기록에서 읽을 수 있는 것입니다. 숫자와 선택을 근거로 한 교육용 해석입니다.</p>
+        <ul className="grid gap-3 sm:grid-cols-2">
+          {report.insights.map((i) => (
+            <li key={i.title} className="rounded-md border border-line bg-surface p-4">
+              <p className="font-semibold">{i.title}</p>
+              <p className="mt-1 text-sm leading-relaxed text-muted">{i.text}</p>
+            </li>
+          ))}
+        </ul>
+      </section>
+
+      <section aria-labelledby="pr-h">
+        <h2 id="pr-h" className="mb-1 text-lg font-semibold">실제 창업에 가져갈 다섯 가지 원칙</h2>
+        <ol className="mt-3 space-y-3">
+          {report.principles.map((i, n) => (
+            <li key={i.title} className="flex gap-3">
+              <span className="num mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-ink text-xs font-bold text-white">{n + 1}</span>
+              <span>
+                <span className="block font-semibold">{i.title}</span>
+                <span className="mt-0.5 block text-sm leading-relaxed text-muted">{i.text}</span>
+              </span>
+            </li>
+          ))}
+        </ol>
+      </section>
 
       <section aria-labelledby="q-h">
         <h2 id="q-h" className="mb-2 text-lg font-semibold">수업에서 이어서 토론할 질문</h2>

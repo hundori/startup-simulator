@@ -52,7 +52,7 @@ export default function GameApp() {
   const [confirmReset, setConfirmReset] = useState(false);
   const [started, setStarted] = useState(false);
   const [teacher, setTeacher] = useState(false);
-  const [previewCost, setPreviewCost] = useState<number | null>(null);
+  const [previewCost, setPreviewCost] = useState<{ cost: number; fixedDelta: number } | null>(null);
   // 교수자 취합 화면은 주소 끝에 #teacher 를 붙여 연다 (메뉴에는 노출하지 않음)
   useEffect(() => {
     const f = () => setTeacher(window.location.hash === '#teacher');

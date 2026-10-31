@@ -6,6 +6,9 @@ import { formatMoney, monthToLabel } from './format';
 import { BUSINESS_TYPES, CUSTOMER_TYPES, REVENUE_MODELS } from './templates';
 import { scoreGame } from './scoring';
 import { withJosa } from './josa';
+import { createInitialState } from './templates';
+import { monthlyFixedCost, projectedMonthlyProfit, unitEconomics, aiAutomated } from './rules';
+import { EMERGENCY_EVENT_ID } from './events';
 
 export interface TurningPoint {
   kind: 'best' | 'worst';
@@ -23,6 +26,11 @@ export interface ReasonStat {
   comment: string;
 }
 
+export interface Insight {
+  title: string;
+  text: string;
+}
+
 export interface Report {
   score: Score;
   headline: string;
@@ -30,6 +38,8 @@ export interface Report {
   turningPoints: TurningPoint[];
   reasons: ReasonStat[];
   discussion: { total: number; avgLength: number; withDissent: number; shortLabel: string };
+  insights: Insight[]; // 우리 팀의 결과에서 읽을 수 있는 것
+  principles: Insight[]; // 이 시뮬레이션이 주는 일반 원칙
   questions: string[];
   endNotes: string[];
 }
@@ -75,6 +85,101 @@ const QUESTION_BY_PART: Record<keyof Score['parts'], string[]> = {
     '평판을 지키기 위해 단기 비용을 감수한 적이 있는가?',
   ],
 };
+
+export const PRINCIPLES: Insight[] = [
+  {
+    title: '일회성 비용과 월 고정비는 완전히 다른 돈입니다',
+    text: '외주비 300만원은 한 번 나가고 끝나지만, 월 250만원짜리 채용이나 구독은 12개월이면 3,000만원이 됩니다. 같은 "비용"이어도 런웨이를 줄이는 속도가 다릅니다. 결정 전에 "이 돈은 한 번인가, 매달인가"를 먼저 물어야 합니다.',
+  },
+  {
+    title: '런웨이는 현금이 아니라 속도의 문제입니다',
+    text: '현금이 1억원이어도 매달 2,000만원씩 새면 5개월입니다. 매출이 늘어도 고정비가 더 빨리 늘면 런웨이는 오히려 짧아집니다. 투자는 시간을 사는 것이지 문제를 해결하는 것이 아닙니다.',
+  },
+  {
+    title: '고객이 늘어도 고객 하나가 남기는 돈이 중요합니다',
+    text: '고객 확보 비용보다 고객 생애 가치가 3배 이상 커야 마케팅을 늘릴수록 이익이 남습니다. 이탈률이 높은 사업에서 광고를 늘리면 구멍 난 독에 물을 붓는 셈이 됩니다.',
+  },
+  {
+    title: '위기는 갑자기 오지 않고, 신호가 먼저 옵니다',
+    text: '런웨이가 6개월 아래로 내려갈 때 선택지는 많고, 1개월 아래에서는 지분·팀·신뢰를 갈아 넣는 선택만 남습니다. 늦게 움직일수록 같은 결정의 비용이 커집니다.',
+  },
+  {
+    title: '좋은 결정은 결과가 아니라 근거로 평가합니다',
+    text: '같은 선택도 회사 상태에 따라 다른 결과가 나옵니다. 그래서 "무엇을 골랐나"보다 "어떤 수치와 가정을 보고 골랐나"를 남기는 것이 실제 창업에서도 가장 재사용 가능한 자산입니다.',
+  },
+];
+
+function buildInsights(game: Game): Insight[] {
+  const { setup, sim, history, decisions } = game;
+  const list: Insight[] = [];
+  const m = (v: number) => formatMoney(Math.round(v));
+
+  // 1) 고정비 구조
+  const startFixed = monthlyFixedCost(createInitialState(setup));
+  const endFixed = monthlyFixedCost(sim);
+  const fixedChange = endFixed - startFixed;
+  list.push({
+    title: '고정비가 어떻게 변했나',
+    text: `월 고정비는 ${m(startFixed)}에서 ${m(endFixed)}으로 ${fixedChange >= 0 ? '늘었습니다' : '줄었습니다'}(${fixedChange >= 0 ? '+' : '−'}${m(Math.abs(fixedChange))}). 한 번 늘린 채용·운영비·마케팅비는 줄이기 어렵습니다. 결정할 때 일회성 비용과 월 고정비 변동을 따로 계산했는지 돌아보세요.`,
+  });
+
+  // 2) 현금이 가장 얕았던 순간
+  let low = history[0];
+  for (const h of history) if (h.cash < low.cash) low = h;
+  const negMonths = history.filter((h) => h.month > 0 && h.cash < 0).length;
+  const usedEmergency = decisions.some((d) => d.eventId === EMERGENCY_EVENT_ID);
+  list.push({
+    title: '현금이 가장 얕았던 순간',
+    text: `현금이 가장 적었던 때는 ${monthToLabel(low.month).replace(/ 시점$/, '')}로 ${m(low.cash)}이었습니다${negMonths > 0 ? `. 현금이 마이너스였던 달이 ${negMonths}개월 있었습니다` : ''}. ${
+      usedEmergency
+        ? '런웨이가 1개월 아래로 내려가 긴급 생존 카드를 사용했습니다. 그 전 어느 결정에서 위험 신호를 볼 수 있었는지 짚어 보세요.'
+        : '긴급 생존 카드를 쓸 만큼 몰리지는 않았습니다. 그 여유가 어느 결정에서 만들어졌는지 확인해 보세요.'
+    }`,
+  });
+
+  // 3) 단위경제
+  const ue = unitEconomics(sim);
+  if (ue.ratio !== null) {
+    list.push({
+      title: '고객 한 명이 남긴 돈',
+      text: `마지막 시점 고객 확보 비용은 약 ${ue.cac < 1 ? '1만원 미만' : m(ue.cac)}, 고객 생애 가치는 약 ${m(ue.ltv)}으로 ${ue.ratio.toFixed(1)}배입니다. ${
+        ue.ratio >= 3 ? '3배를 넘어 마케팅을 늘릴 여지가 있는 구조입니다.' : '3배에 못 미쳐 마케팅을 늘리기 전에 이탈률과 고객당 이익부터 손봐야 하는 구조입니다.'
+      }`,
+    });
+  }
+
+  // 4) 성장과 수익
+  const end = history[history.length - 1];
+  const start = history[0];
+  const profit = projectedMonthlyProfit(sim);
+  list.push({
+    title: '성장과 수익의 균형',
+    text: `월 매출은 ${m(start.revenue)}에서 ${m(end.revenue)}으로 ${end.revenue >= start.revenue ? '늘었지만' : '줄었고'}, 마지막 시점 월 이익은 ${profit >= 0 ? '+' : '−'}${m(Math.abs(profit))}입니다. ${
+      profit >= 0 ? '매출이 고정비를 넘어서 시간이 회사 편이 된 상태입니다.' : '매출이 아직 비용을 따라가지 못해, 이 상태가 길어지면 런웨이가 다시 줄어듭니다.'
+    }`,
+  });
+
+  // 5) AI 활용
+  const ai = aiAutomated(sim);
+  list.push({
+    title: 'AI와 사람의 역할',
+    text: `AI가 맡은 업무는 ${Math.round(ai * 100)}%(업종 상한 ${Math.round((sim.aiShare ?? 0.3) * 100)}%)였습니다. ${
+      ai >= 0.3
+        ? 'AI로 같은 인원이 더 많은 고객을 받을 수 있었지만, 품질과 평판을 함께 점검했는지가 중요합니다.'
+        : 'AI를 거의 쓰지 않아 인력 확대에 의존했습니다. 고정비가 늘어나는 채용 대신 AI로 해결할 수 있었던 일이 있었는지 토론해 보세요.'
+    }`,
+  });
+
+  // 6) 가장 약했던 영역
+  const weakest = (Object.entries(scoreGame(game).parts) as [string, number][]).sort((a, b) => a[1] - b[1])[0];
+  const label: Record<string, string> = { finance: '재무', growth: '성장', quality: '제품 품질', team: '팀', reputation: '평판' };
+  list.push({
+    title: '다음에 가장 먼저 보완할 영역',
+    text: `점수가 가장 낮은 영역은 ${label[weakest[0]]}(${weakest[1]}점)입니다. 이 영역을 끌어올릴 수 있었던 결정은 무엇이었는지 팀이 함께 골라 보세요.`,
+  });
+
+  return list;
+}
 
 export function generateReport(game: Game): Report {
   const score = scoreGame(game);
@@ -158,7 +263,8 @@ export function generateReport(game: Game): Report {
   if (sim.debt > 0) endNotes.push(`종료 시점 부채가 ${formatMoney(sim.debt)} 남아 있습니다.`);
   endNotes.push(DISCLAIMER_LONG);
 
-  return { score, headline, summary, turningPoints, reasons, discussion, questions, endNotes };
+  const insights = buildInsights(game);
+  return { score, headline, summary, turningPoints, reasons, discussion, insights, principles: PRINCIPLES, questions, endNotes };
 }
 
 export function reportToMarkdown(game: Game, report: Report): string {
@@ -182,6 +288,11 @@ export function reportToMarkdown(game: Game, report: Report): string {
     }
     lines.push('');
   }
+  lines.push('## 이 시뮬레이션에서 얻은 인사이트', '');
+  for (const i of report.insights) lines.push(`- ${i.title}: ${i.text}`);
+  lines.push('', '## 창업에 가져갈 원칙', '');
+  for (const i of report.principles) lines.push(`- ${i.title}: ${i.text}`);
+  lines.push('');
   lines.push('## 실패 요인별 대응', '');
   for (const r of report.reasons) {
     lines.push(`- ${r.label}: 잘함 ${r.strong}, 보통 ${r.ok}, 아쉬움 ${r.weak}. ${r.comment}`);
