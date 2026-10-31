@@ -132,7 +132,7 @@ export default function GameApp() {
 
   return (
     <div className="min-h-dvh">
-      <header className="bg-ink text-white print:hidden">
+      <header className={`bg-ink text-white print:hidden ${landing ? 'hidden' : ''}`}>
         <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
           <p className="whitespace-nowrap font-serif text-lg font-bold tracking-tight">
             Startup Simulator
