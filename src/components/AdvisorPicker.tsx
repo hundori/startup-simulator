@@ -4,51 +4,11 @@ import { useState } from 'react';
 import type { Game } from '@/engine';
 import { ADVISORS, ADVISOR_DISCLAIMER, adviceFor } from '@/engine';
 import type { AdvisorId } from '@/engine';
+import { ADVISOR_PHOTOS } from './advisorPhotos';
 
-/** 단순한 캐리커처 스타일 일러스트. 실제 사진이 아니라 특징만 살린 만화 아이콘이다. */
-function Avatar({ id }: { id: AdvisorId }) {
-  const skin = '#f2c9a5';
-  return (
-    <svg viewBox="0 0 120 120" className="h-24 w-24" role="img" aria-hidden="true">
-      <rect width="120" height="120" rx="20" fill={{ jobs: '#e8edf6', musk: '#e4eef7', zuckerberg: '#e9f0e6', bezos: '#f6ece0' }[id]} />
-      {/* 몸통 */}
-      {id === 'jobs' && <path d="M18 120c4-24 22-34 42-34s38 10 42 34z" fill="#111" />}
-      {id === 'musk' && <path d="M18 120c4-24 22-34 42-34s38 10 42 34z" fill="#2b2f36" />}
-      {id === 'zuckerberg' && <path d="M18 120c4-24 22-34 42-34s38 10 42 34z" fill="#9aa1a9" />}
-      {id === 'bezos' && <path d="M18 120c4-24 22-34 42-34s38 10 42 34z" fill="#34506e" />}
-      <rect x="52" y="76" width="16" height="14" fill={skin} />
-      {/* 얼굴 */}
-      <ellipse cx="60" cy="54" rx={id === 'zuckerberg' ? 27 : 25} ry={id === 'bezos' ? 29 : 28} fill={skin} />
-      {/* 머리카락 */}
-      {id === 'jobs' && <path d="M35 46c2-16 14-22 25-22s23 6 25 22c-6-8-14-10-25-10s-19 2-25 10z" fill="#8a8a8a" />}
-      {id === 'musk' && <path d="M34 48c0-18 12-26 26-26s26 8 26 26c-4-8-12-12-26-12s-22 4-26 12z" fill="#3a2a22" />}
-      {id === 'zuckerberg' && (
-        <g fill="#a9743f">
-          <circle cx="38" cy="40" r="9" /><circle cx="50" cy="32" r="10" /><circle cx="64" cy="31" r="10" /><circle cx="77" cy="37" r="10" /><circle cx="83" cy="48" r="7" />
-        </g>
-      )}
-      {id === 'bezos' && <path d="M36 44c1-6 5-8 8-8M84 44c-1-6-5-8-8-8" stroke="#b58a62" strokeWidth="3" fill="none" strokeLinecap="round" />}
-      {/* 안경 */}
-      {id === 'jobs' && (
-        <g fill="none" stroke="#222" strokeWidth="2.5">
-          <circle cx="49" cy="54" r="8" /><circle cx="71" cy="54" r="8" /><path d="M57 54h6" />
-        </g>
-      )}
-      {/* 눈·입 */}
-      {id !== 'jobs' && (
-        <g fill="#222">
-          <circle cx="50" cy="54" r="2.6" /><circle cx="70" cy="54" r="2.6" />
-        </g>
-      )}
-      {id === 'jobs' && (
-        <g fill="#222">
-          <circle cx="49" cy="54" r="2" /><circle cx="71" cy="54" r="2" />
-        </g>
-      )}
-      <path d={id === 'bezos' ? 'M46 68q14 14 28 0' : id === 'musk' ? 'M49 69q11 7 22 0' : 'M50 70q10 5 20 0'} stroke="#222" strokeWidth="2.5" fill={id === 'bezos' ? '#fff' : 'none'} strokeLinecap="round" />
-      {id === 'jobs' && <path d="M46 72q14 6 28 0" stroke="#7a7a7a" strokeWidth="3" fill="none" opacity=".5" />}
-    </svg>
-  );
+function Avatar({ id, name }: { id: AdvisorId; name: string }) {
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={ADVISOR_PHOTOS[id]} alt={`${name} 사진`} className="h-24 w-24 rounded-md object-cover" />;
 }
 
 export default function AdvisorPicker({ game }: { game: Game }) {
@@ -72,7 +32,7 @@ export default function AdvisorPicker({ game }: { game: Game }) {
               id === a.id ? 'border-accent bg-accent-soft' : 'border-line bg-surface hover:border-accent/50'
             }`}
           >
-            <Avatar id={a.id} />
+            <Avatar id={a.id} name={a.name} />
             <span className="mt-2 font-semibold">{a.name}</span>
             <span className="mt-1 text-xs text-muted">{a.tagline}</span>
           </button>
