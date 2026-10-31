@@ -2,7 +2,8 @@
 
 import { useEffect, useState } from 'react';
 import type { Game, ResolvedEvent } from '@/engine';
-import { MIN_RATIONALE_LENGTH, formatMoney, reasonLabel, shortIdea } from '@/engine';
+import { MIN_RATIONALE_LENGTH, explainEvent, formatMoney, reasonLabel, shortIdea } from '@/engine';
+import Assumptions from './Assumptions';
 import Choice from './Choice';
 import { Badge, Button, Callout, STAGE_LABEL } from './ui';
 
@@ -109,6 +110,8 @@ export default function EventScreen({
           <p className="mt-3 text-xs text-muted">우리 아이디어: {shortIdea(game.setup.idea, 60)} · 대상: {game.setup.targetCustomer}</p>
         </div>
       </header>
+
+      <Assumptions basis={explainEvent(game, event)} />
 
       <section aria-labelledby="discuss-h">
         <h2 id="discuss-h" className="mb-2 text-sm font-semibold">

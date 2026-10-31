@@ -9,8 +9,10 @@ import {
   monthlyInterest,
   payroll,
   utilization,
+  explainStart,
   withJosa,
 } from '@/engine';
+import Assumptions from './Assumptions';
 import { Button, Callout } from './ui';
 
 export default function IntroScreen({ game, onBegin }: { game: Game; onBegin: () => void }) {
@@ -41,6 +43,8 @@ export default function IntroScreen({ game, onBegin }: { game: Game; onBegin: ()
         <h1 className="text-3xl font-bold leading-tight">{withJosa(setup.companyName, '이/가')} 문을 열었습니다</h1>
         <p className="mt-3 whitespace-pre-wrap text-muted">{setup.idea}</p>
       </header>
+
+      <Assumptions basis={explainStart(game)} />
 
       <section aria-labelledby="start-heading">
         <h2 id="start-heading" className="mb-2 text-lg font-semibold">

@@ -1,5 +1,6 @@
 import type { DecisionRecord, Game, MetricSnapshot } from '@/engine';
-import { formatMoney, formatNumber, formatSigned, formatSignedMoney, reasonLabel } from '@/engine';
+import { explainOutcome, formatMoney, formatNumber, formatSigned, formatSignedMoney, reasonLabel } from '@/engine';
+import Assumptions from './Assumptions';
 import { Badge, Button, Callout, VERDICT_LABEL } from './ui';
 
 const ROWS: { key: keyof MetricSnapshot; label: string; money?: boolean; count?: boolean }[] = [
@@ -93,6 +94,8 @@ export default function OutcomeScreen({ game, onContinue }: { game: Game; onCont
       ) : null}
 
       <Result d={d} />
+
+      <Assumptions basis={explainOutcome(game, d)} />
 
       {d.notes.length > 0 ? (
         <Callout tone="warn" title="운영 상황 알림">

@@ -3,7 +3,8 @@
 import type { Game } from '@/engine';
 import SubmitPanel from './SubmitPanel';
 import AdvisorPicker from './AdvisorPicker';
-import { DISCLAIMER_LONG, generateReport, monthToLabel, reportToMarkdown } from '@/engine';
+import { DISCLAIMER_LONG, explainReport, generateReport, monthToLabel, reportToMarkdown } from '@/engine';
+import Assumptions from './Assumptions';
 import TrendCharts from './TrendCharts';
 import { Badge, Button, Callout, VERDICT_LABEL } from './ui';
 
@@ -35,6 +36,8 @@ export default function FinalReport({ game, onRestart }: { game: Game; onRestart
         <p className="text-sm text-muted">최종 학습 보고서</p>
         <h1 className="mt-1 text-2xl font-bold leading-tight sm:text-3xl">{report.headline}</h1>
       </header>
+
+      <Assumptions basis={explainReport(game)} />
 
       {bankrupt ? (
         <Callout tone="danger" title="파산으로 끝난 게임입니다">
