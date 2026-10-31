@@ -16,10 +16,11 @@ import EventScreen, { clearDraft } from './EventScreen';
 import FinalReport from './FinalReport';
 import HistoryPanel from './HistoryPanel';
 import IntroScreen from './IntroScreen';
+import PhaseBar from './PhaseBar';
 import OutcomeScreen from './OutcomeScreen';
 import SetupScreen from './SetupScreen';
 import StatusPanel from './StatusPanel';
-import { Button, Callout } from './ui';
+import { Callout } from './ui';
 
 const storage = new LocalStorageAdapter();
 
@@ -116,40 +117,70 @@ export default function GameApp() {
     );
   }
 
+  const inGame = game !== null && game.phase !== 'finished';
+
   return (
     <div className="min-h-dvh">
-      <header className="border-b border-line bg-surface print:hidden">
-        <div className="mx-auto flex max-w-5xl items-center justify-between gap-3 px-4 py-2">
-          <p className="whitespace-nowrap font-bold">Startup Simulator</p>
+      <header className="bg-ink text-white print:hidden">
+        <div className="mx-auto flex max-w-6xl items-center justify-between gap-3 px-4 py-3 sm:px-6">
+          <p className="whitespace-nowrap font-serif text-lg font-bold tracking-tight">
+            Startup Simulator
+            <span className="ml-3 hidden font-sans text-xs font-normal text-white/60 sm:inline">창업 경영 시뮬레이션</span>
+          </p>
           <div className="flex items-center">
             {game ? (
               <>
-                <span className="mr-2 hidden text-xs text-muted sm:inline" role="status">
+                <span className="mr-3 hidden text-xs text-white/60 sm:inline" role="status">
                   {saveError ? '저장 실패 (브라우저 저장소 확인)' : '자동 저장됨'}
                 </span>
-                <Button variant="ghost" onClick={() => setShowHistory(true)}>
+                <button
+                  type="button"
+                  onClick={() => setShowHistory(true)}
+                  className="min-h-11 whitespace-nowrap px-3 text-sm font-semibold text-white/85 hover:text-white"
+                >
                   결정 기록
-                </Button>
-                <Button variant="ghost" onClick={() => setConfirmReset(true)}>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setConfirmReset(true)}
+                  className="min-h-11 whitespace-nowrap px-3 text-sm font-semibold text-white/85 hover:text-white"
+                >
                   처음부터
-                </Button>
+                </button>
               </>
             ) : null}
           </div>
         </div>
+        {game ? (
+          <div className="mx-auto max-w-6xl px-4 pb-0 sm:px-6">
+            <PhaseBar game={game} />
+          </div>
+        ) : null}
       </header>
 
-      <main className="mx-auto max-w-5xl space-y-6 px-4 py-6">
+      <main className="mx-auto max-w-6xl px-4 py-8 sm:px-6">
         {saveError ? (
-          <Callout tone="warn" role="alert">
-            브라우저에 저장하지 못했습니다. 시크릿 모드이거나 저장 공간이 가득 찼을 수 있습니다. 새로고침하면 진행 상황이 사라질 수 있습니다.
-          </Callout>
+          <div className="mb-6">
+            <Callout tone="warn" role="alert">
+              브라우저에 저장하지 못했습니다. 시크릿 모드이거나 저장 공간이 가득 찼을 수 있습니다. 새로고침하면 진행 상황이 사라질 수 있습니다.
+            </Callout>
+          </div>
         ) : null}
-        {game && game.phase !== 'finished' ? <StatusPanel game={game} /> : null}
-        {body}
+        {inGame && game ? (
+          <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_19rem] lg:gap-12">
+            <div className="order-2 min-w-0 lg:order-1">{body}</div>
+            <div className="order-1 lg:order-2">
+              <div className="lg:sticky lg:top-6">
+                <StatusPanel game={game} />
+              </div>
+            </div>
+          </div>
+        ) : (
+          body
+        )}
       </main>
 
-      <footer className="mx-auto max-w-5xl px-4 pb-10 text-xs text-muted">{DISCLAIMER_SHORT}</footer>
+      <footer className="mx-auto max-w-6xl border-t border-line px-4 py-6 text-xs text-muted sm:px-6">{DISCLAIMER_SHORT}</footer>
 
       {showHistory && game ? <HistoryPanel decisions={game.decisions} onClose={() => setShowHistory(false)} /> : null}
       {confirmReset ? (

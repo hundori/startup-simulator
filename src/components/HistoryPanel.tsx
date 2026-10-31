@@ -52,7 +52,7 @@ export default function HistoryPanel({
               {decisions.map((d, i) => (
                 <li key={`${d.eventId}-${i}`} className="border-l-2 border-line pl-3">
                   <p className="text-xs text-muted">
-                    {i + 1}번째 · {monthToLabel(d.month === 0 ? 0 : d.month)} 시점 · {VERDICT_LABEL[d.verdict]}
+                    {i + 1}번째 · {monthToLabel(d.month).replace(/ 시점$/, '')} 시점 · {VERDICT_LABEL[d.verdict]}
                   </p>
                   <p className="font-semibold">{d.eventTitle}</p>
                   <p className="text-sm">선택: {d.optionLabel}</p>

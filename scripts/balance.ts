@@ -44,7 +44,7 @@ const strategies: Record<string, (seed: number) => Chooser> = {
   },
 };
 
-const capitals = [5000, 10000, 20000];
+const capitals = process.env.CAPS ? process.env.CAPS.split(',').map(Number) : [5000, 10000, 20000];
 const members = 3;
 
 for (const mode of ['class', 'full'] as const) {

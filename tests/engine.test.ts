@@ -22,6 +22,8 @@ import {
   resolveEvent,
   scoreGame,
   stageCandidates,
+  payroll,
+  toPublicOption,
   submitDecision,
   utilization,
   validateSetup,
@@ -64,10 +66,27 @@ describe('A. 초기 상태', () => {
   it('A3 입력 검증', () => {
     expect(validateSetup(baseSetup())).toEqual([]);
     expect(validateSetup(baseSetup({ companyName: ' ' })).length).toBeGreaterThan(0);
-    expect(validateSetup(baseSetup({ capital: 500 })).length).toBeGreaterThan(0);
+    expect(validateSetup(baseSetup({ capital: 99 })).length).toBeGreaterThan(0);
+    expect(validateSetup(baseSetup({ capital: 100 }))).toEqual([]);
+    expect(validateSetup(baseSetup({ capital: 100001 })).length).toBeGreaterThan(0);
     expect(validateSetup(baseSetup({ members: 0 })).length).toBeGreaterThan(0);
     expect(validateSetup(baseSetup({ members: 7 })).length).toBeGreaterThan(0);
     expect(validateSetup(baseSetup({ idea: '짧다' })).length).toBeGreaterThan(0);
+  });
+  it('A3b 100만원 창업: 규모가 줄어 첫 달 고정비가 자본을 넘지 않는다', () => {
+    const sim = createInitialState(baseSetup({ capital: 100, members: 2 }));
+    expect(sim.cash).toBe(100);
+    expect(payroll(sim) + sim.overhead + sim.marketingBudget).toBeLessThan(sim.cash);
+    const g = play({ capital: 100, members: 2, mode: 'class' }, cheapest);
+    expect(g.phase).toBe('finished');
+    expect(g.history.length).toBeGreaterThan(1);
+  });
+  it('A3c 소액 창업에서는 이벤트 비용도 같은 비율로 줄어든다', () => {
+    const opt = getEvent('e02-runway').options.find((o) => o.id === 'seed')!;
+    const g = newGame();
+    const big = toPublicOption(g, opt);
+    const small = toPublicOption({ ...g, sim: { ...g.sim, scale: 0.1 } }, opt);
+    expect(small.cost).toBe(Math.round(big.cost * 0.1));
   });
   it('A4 같은 입력은 같은 초기 상태', () => {
     expect(createInitialState(baseSetup())).toEqual(createInitialState(baseSetup()));

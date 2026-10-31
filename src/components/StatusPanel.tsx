@@ -52,7 +52,7 @@ function TimeStrip({ game }: { game: Game }) {
       role="img"
       aria-label={`36개월 중 ${sim.month}개월 경과, 현금이 마이너스였던 달 ${negativeMonths}개월, 결정 ${decisions.length}회`}
     >
-      <div className="grid gap-3 sm:grid-cols-3">
+      <div className="grid gap-3">
         {YEARS.map((y) => (
           <div key={y.n}>
             <p className="mb-1 text-xs text-muted">{y.label}</p>
@@ -182,45 +182,49 @@ export default function StatusPanel({ game }: { game: Game }) {
   ];
 
   return (
-    <section aria-label="회사 현황" className="mb-8 space-y-4 print:hidden">
-      <div className="rounded-md border border-line bg-surface p-4">
-        <div className="mb-3 flex flex-wrap items-baseline justify-between gap-2">
-          <p className="text-sm text-muted">
-            <span className="num font-semibold text-ink">{sim.month}</span>개월 경과 / 36개월
-          </p>
+    <aside aria-label="회사 현황" className="print:hidden">
+      <div className="border-t-[3px] border-ink bg-surface">
+        <div className="flex items-baseline justify-between gap-2 border-b border-line px-4 py-3">
+          <h2 className="font-sans text-sm font-bold">경영 현황</h2>
           <Runway game={game} />
         </div>
-        <TimeStrip game={game} />
-      </div>
 
-      <div className="grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-3 lg:grid-cols-6">
-        {items.map((it) => (
-          <div key={it.key} className="bg-surface p-3">
-            <p className="text-xs text-muted">{it.label}</p>
-            <p className="num mt-0.5 text-lg font-semibold leading-snug">
-              {it.value}
-              {it.unit ? <span className="ml-0.5 text-xs font-normal text-muted">{it.unit}</span> : null}
-            </p>
-            {it.gauge !== undefined ? bar(it.gauge) : null}
-            <p className={`num mt-1 min-h-4 text-xs ${it.delta === null ? '' : deltaClass(it.delta)}`}>
-              {it.delta === null ? ' ' : `직전 결정 전 대비 ${it.deltaText}`}
-            </p>
+        <dl className="grid grid-cols-2 divide-x divide-y divide-line border-b border-line lg:grid-cols-1 lg:divide-x-0">
+          {items.map((it) => (
+            <div key={it.key} className="px-4 py-3">
+              <dt className="text-xs text-muted">{it.label}</dt>
+              <dd className="num mt-0.5 text-xl font-semibold leading-snug">
+                {it.value}
+                {it.unit ? <span className="ml-0.5 text-xs font-normal text-muted">{it.unit}</span> : null}
+              </dd>
+              {it.gauge !== undefined ? bar(it.gauge) : null}
+              <p className={`num mt-1 min-h-4 text-xs ${it.delta === null ? '' : deltaClass(it.delta)}`}>
+                {it.delta === null ? ' ' : `직전 결정 대비 ${it.deltaText}`}
+              </p>
+            </div>
+          ))}
+        </dl>
+
+        <div className="border-b border-line px-4 py-3">
+          <p className="mb-2 text-sm text-muted">
+            <span className="num font-semibold text-ink">{sim.month}</span>개월 경과 / 36개월
+          </p>
+          <TimeStrip game={game} />
+        </div>
+
+        <div className="space-y-1 px-4 py-3 text-sm text-muted">
+          <p className="num">
+            인력 {sim.headcount}명 · 월 고정비 {formatMoney(fixed)}
+          </p>
+          <p className="num">가동률 {Math.round(util * 100)}%</p>
+          <div className="flex flex-wrap gap-1.5 pt-1">
+            {util > 1 ? <Badge tone="warn">인력 부족</Badge> : null}
+            {sim.cash < 0 ? <Badge tone="danger">현금 마이너스 {sim.insolvencyMonths}개월째 · 2개월 연속이면 파산</Badge> : null}
+            {sim.debt > 0 ? <Badge tone="neutral">부채 {formatMoney(sim.debt)}</Badge> : null}
+            {sim.dilution > 0 ? <Badge tone="neutral">지분 희석 {sim.dilution}%</Badge> : null}
           </div>
-        ))}
+        </div>
       </div>
-
-      <p className="flex flex-wrap items-center gap-x-4 gap-y-2 text-sm text-muted">
-        <span className="num">
-          인력 {sim.headcount}명 · 월 고정비 {formatMoney(fixed)}
-        </span>
-        <span className="num">가동률 {Math.round(util * 100)}%</span>
-        {util > 1 ? <Badge tone="warn">인력 부족</Badge> : null}
-        {sim.cash < 0 ? (
-          <Badge tone="danger">현금 마이너스 {sim.insolvencyMonths}개월째 · 2개월 연속이면 파산</Badge>
-        ) : null}
-        {sim.debt > 0 ? <Badge tone="neutral">부채 {formatMoney(sim.debt)}</Badge> : null}
-        {sim.dilution > 0 ? <Badge tone="neutral">지분 희석 {sim.dilution}%</Badge> : null}
-      </p>
-    </section>
+    </aside>
   );
 }

@@ -85,7 +85,7 @@ export default function EventScreen({
   const helper = draft.optionId === null ? '대안을 먼저 고르세요.' : !enough ? `근거를 ${MIN_RATIONALE_LENGTH - len}자 더 적어 주세요.` : '결정할 준비가 됐습니다.';
 
   return (
-    <form onSubmit={submit} className="mx-auto max-w-2xl space-y-6">
+    <form onSubmit={submit} className="max-w-2xl space-y-6">
       <header>
         <p className="flex flex-wrap items-center gap-2 text-sm text-muted">
           <span>{STAGE_LABEL[event.stage]}</span>
@@ -94,9 +94,11 @@ export default function EventScreen({
           </span>
           <Badge tone="accent">{reasonLabel(event.reason)}</Badge>
         </p>
-        <h1 className="mt-2 text-2xl font-bold leading-tight sm:text-3xl">{event.title}</h1>
-        <p className="mt-3 leading-relaxed">{event.situation}</p>
-        {event.context ? <p className="mt-2 text-sm text-muted">{event.context}</p> : null}
+        <h1 className="mt-3 text-2xl font-bold sm:text-3xl">{event.title}</h1>
+        <div className="mt-4 border-l-[3px] border-brass pl-4">
+          <p className="leading-relaxed">{event.situation}</p>
+          {event.context ? <p className="mt-2 text-sm text-muted">{event.context}</p> : null}
+        </div>
       </header>
 
       <section aria-labelledby="discuss-h">
@@ -114,14 +116,14 @@ export default function EventScreen({
         <legend className="mb-1 text-lg font-semibold">우리의 결정</legend>
         <p className="mb-3 text-sm text-muted">각 대안의 결과는 결정한 뒤에 공개됩니다. 비용은 즉시 현금에서 빠집니다.</p>
         <div className="space-y-2">
-          {event.options.map((o) => (
+          {event.options.map((o, idx) => (
             <Choice
               key={o.id}
               name="option"
               checked={draft.optionId === o.id}
               disabled={!o.available}
               onChange={() => update({ optionId: o.id })}
-              title={o.label}
+              title={`${String.fromCharCode(65 + idx)}. ${o.label}`}
             >
               <span className="block text-sm text-muted">{o.description}</span>
               <span className="num mt-1 block text-sm">

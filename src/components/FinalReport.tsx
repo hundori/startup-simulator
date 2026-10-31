@@ -28,7 +28,7 @@ export default function FinalReport({ game, onRestart }: { game: Game; onRestart
   };
 
   return (
-    <article className="mx-auto max-w-3xl space-y-8">
+    <article className="max-w-4xl space-y-8">
       <header>
         <p className="text-sm text-muted">최종 학습 보고서</p>
         <h1 className="mt-1 text-2xl font-bold leading-tight sm:text-3xl">{report.headline}</h1>
@@ -81,7 +81,7 @@ export default function FinalReport({ game, onRestart }: { game: Game; onRestart
               <li key={t.kind} className="rounded-md border border-line bg-surface p-4">
                 <p className="flex flex-wrap items-center gap-2 text-sm">
                   <Badge tone={t.kind === 'best' ? 'good' : 'warn'}>{t.kind === 'best' ? '가장 좋았던 결정' : '가장 아쉬웠던 결정'}</Badge>
-                  <span className="text-muted">{monthToLabel(t.decision.month)} 시점 · {VERDICT_LABEL[t.decision.verdict]}</span>
+                  <span className="text-muted">{monthToLabel(t.decision.month).replace(/ 시점$/, '')} 시점 · {VERDICT_LABEL[t.decision.verdict]}</span>
                 </p>
                 <p className="mt-1 font-semibold">{t.decision.eventTitle}</p>
                 <p className="text-sm">선택: {t.decision.optionLabel}</p>

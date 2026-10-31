@@ -27,6 +27,21 @@ export function clamp(value: number, lo: number, hi: number): number {
 }
 const r1 = (v: number) => Math.round(v * 10) / 10;
 
+// ---------- 규모 배율 ----------
+export const SCALE_BASE_CAPITAL = 5000;
+export const MIN_CAPITAL = 100;
+export function scaleOf(s: Pick<SimState, 'scale'>): number {
+  return s.scale ?? 1;
+}
+export function scaleFor(capital: number): number {
+  return clamp(capital / SCALE_BASE_CAPITAL, 0.02, 1);
+}
+/** 이벤트 데이터는 표준 규모(만원)로 쓰여 있다. 소액 창업이면 금액을 같은 비율로 줄인다. */
+export function scaleMoney(s: Pick<SimState, 'scale'>, amount: number): number {
+  const k = scaleOf(s);
+  return k >= 1 ? amount : Math.round(amount * k);
+}
+
 // ---------- 파생 값 ----------
 export function capacity(s: SimState): number {
   return Math.max(1, s.headcount * s.capPerHead);
@@ -81,7 +96,14 @@ export function metricValue(s: SimState, metric: CondMetric): number {
       return r === null ? 999 : r;
     }
     case 'monthlyProfit':
-      return projectedMonthlyProfit(s);
+      return projectedMonthlyProfit(s) / scaleOf(s);
+    case 'cash':
+    case 'monthlyRevenue':
+    case 'customers':
+    case 'debt':
+    case 'marketingBudget':
+      // 조건 기준값은 표준 규모로 쓰여 있으므로 소액 창업은 표준 규모로 환산해 비교한다.
+      return s[metric] / scaleOf(s);
     default:
       return s[metric];
   }
@@ -218,13 +240,13 @@ export function advanceMonth(s: SimState): MonthResult {
 export function applyEffects(s: SimState, e: Effects): SimState {
   let customers = s.customers;
   if (e.customersPct) customers = Math.round(customers * (1 + e.customersPct));
-  if (e.customersAdd) customers += e.customersAdd;
+  if (e.customersAdd) customers += scaleMoney(s, e.customersAdd);
   customers = Math.max(0, Math.round(customers));
 
   let headcount = s.headcount;
   let avgSalary = s.avgSalary;
   if (e.headcount && e.headcount > 0) {
-    avgSalary = (avgSalary * headcount + HIRE_SALARY * e.headcount) / (headcount + e.headcount);
+    avgSalary = (avgSalary * headcount + HIRE_SALARY * scaleOf(s) * e.headcount) / (headcount + e.headcount);
     headcount += e.headcount;
   } else if (e.headcount && e.headcount < 0) {
     headcount = Math.max(1, headcount + e.headcount);
@@ -234,21 +256,21 @@ export function applyEffects(s: SimState, e: Effects): SimState {
 
   return {
     ...s,
-    cash: s.cash + (e.cash ?? 0) + Math.round((e.cashMonths ?? 0) * monthlyFixedCost(s)),
+    cash: s.cash + scaleMoney(s, e.cash ?? 0) + Math.round((e.cashMonths ?? 0) * monthlyFixedCost(s)),
     customers,
     quality: r1(clamp(s.quality + (e.quality ?? 0), 0, 100)),
     morale: r1(clamp(s.morale + (e.morale ?? 0), 0, 100)),
     reputation: r1(clamp(s.reputation + (e.reputation ?? 0), 0, 100)),
     headcount,
     avgSalary: Math.round(avgSalary * 10) / 10,
-    marketingBudget: Math.max(0, s.marketingBudget + (e.marketingBudget ?? 0)),
-    overhead: Math.max(0, s.overhead + (e.overhead ?? 0)),
+    marketingBudget: Math.max(0, s.marketingBudget + scaleMoney(s, e.marketingBudget ?? 0)),
+    overhead: Math.max(0, s.overhead + scaleMoney(s, e.overhead ?? 0)),
     arpu: Math.round(s.arpu * (1 + (e.arpuPct ?? 0)) * 100) / 100,
     churnRate: clamp(s.churnRate + (e.churnRate ?? 0), 0.01, 0.5),
     acqBase: Math.round(s.acqBase * (1 + (e.acqBasePct ?? 0)) * 100) / 100,
     cogsRatio: clamp(s.cogsRatio + (e.cogsRatio ?? 0), 0, 0.95),
     capPerHead: Math.max(1, Math.round(s.capPerHead * (1 + (e.capPerHeadPct ?? 0)))),
-    debt: Math.max(0, s.debt + (e.debt ?? 0)),
+    debt: Math.max(0, s.debt + scaleMoney(s, e.debt ?? 0)),
     dilution: clamp(s.dilution + (e.dilution ?? 0), 0, 90),
     flags,
     // 매출 표시는 다음 월 계산 전까지 현재 고객 수 기준으로 갱신
@@ -268,7 +290,7 @@ export function evaluateOption(
   option: EventOption,
 ): { available: boolean; reasons: string[] } {
   const reasons: string[] = [];
-  const cost = option.cost ?? 0;
+  const cost = scaleMoney(s, option.cost ?? 0);
   if (cost > 0 && cost > s.cash) {
     reasons.push(`현금 부족 (필요 ${formatMoney(cost)}, 보유 ${formatMoney(s.cash)})`);
   }

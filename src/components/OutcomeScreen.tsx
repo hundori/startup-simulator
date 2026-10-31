@@ -76,7 +76,7 @@ export default function OutcomeScreen({ game, onContinue }: { game: Game; onCont
   const last = game.stage === 3 && game.planIndex + 1 >= game.plan.length;
 
   return (
-    <article className="mx-auto max-w-2xl space-y-6">
+    <article className="max-w-2xl space-y-6">
       <header>
         <p className="text-sm text-muted">결정 결과</p>
         <h1 className="mt-1 text-2xl font-bold leading-tight sm:text-3xl">{d.eventTitle}</h1>

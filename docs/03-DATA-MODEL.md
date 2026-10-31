@@ -11,7 +11,7 @@
 | customerType | `b2c \| b2b` | 고객 유형 |
 | targetCustomer | string | 대상 고객 (자유 입력) |
 | revenueModel | `subscription \| sales \| commission \| ads \| service` | 수익모델 |
-| capital | number | 초기 자본(만원), 1,000 ~ 100,000 |
+| capital | number | 초기 자본(만원), 100 ~ 100,000 (5,000 미만은 규모 배율 적용, 규칙 부록 C) |
 | members | number | 창업 멤버 수, 1 ~ 6 |
 | mode | `class \| full` | 수업용(총 6개) / 전체(총 15개) |
 

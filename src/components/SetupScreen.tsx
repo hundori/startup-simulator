@@ -14,7 +14,7 @@ import {
 import Choice from './Choice';
 import { Button, Callout } from './ui';
 
-const PRESETS = [3000, 5000, 10000, 20000, 30000];
+const PRESETS = [100, 500, 1000, 3000, 5000, 10000, 30000];
 
 const INPUT =
   'mt-1 block w-full rounded-md border border-line bg-surface px-3 py-2.5 text-base text-ink placeholder:text-muted/70 focus-visible:border-accent';
@@ -53,7 +53,8 @@ export default function SetupScreen({
   };
 
   return (
-    <form onSubmit={submit} noValidate className="mx-auto max-w-2xl space-y-8">
+    <div className="grid gap-10 lg:grid-cols-[minmax(0,40rem)_1fr] lg:gap-16">
+    <form onSubmit={submit} noValidate className="space-y-8">
       <header>
         <h1 className="text-3xl font-bold leading-tight">우리 조의 회사를 세워 보세요</h1>
         <p className="mt-3 text-muted">
@@ -197,7 +198,12 @@ export default function SetupScreen({
               set('capital', digits === '' ? 0 : Number(digits));
             }}
           />
-          <p className="num mt-1 text-xs text-muted">= {formatMoney(form.capital)} (1,000만원 ~ 10억원)</p>
+          <p className="num mt-1 text-xs text-muted">= {formatMoney(form.capital)} (100만원 ~ 10억원)</p>
+          {form.capital < 5000 ? (
+            <p className="mt-1 text-xs text-muted">
+              자본이 5,000만원보다 작으면 월 비용·고객 수·이벤트 금액이 같은 비율로 줄어듭니다. 대신 여유 자금이 적어 실수할 여지가 작습니다.
+            </p>
+          ) : null}
         </div>
         <div>
           <label htmlFor="members" className="text-sm font-semibold">
@@ -254,5 +260,26 @@ export default function SetupScreen({
         회사 설립하기
       </Button>
     </form>
+    <aside className="hidden lg:block">
+      <div className="sticky top-8 border-t-[3px] border-ink bg-surface">
+        <h2 className="border-b border-line px-5 py-4 font-sans text-sm font-bold">진행 방식</h2>
+        <ol className="divide-y divide-line">
+          {[
+            ['1년 차 생존', '현금이 바닥나기 전에 시장이 돈을 내는지 확인합니다.'],
+            ['2년 차 성장', '고객과 조직을 함께 키우며 비용 구조를 다듬습니다.'],
+            ['3년 차 확장', '투자·확장·수익성 사이에서 방향을 정합니다.'],
+          ].map(([t, d]) => (
+            <li key={t} className="px-5 py-4">
+              <p className="font-semibold">{t}</p>
+              <p className="mt-1 text-sm text-muted">{d}</p>
+            </li>
+          ))}
+        </ol>
+        <p className="border-t border-line px-5 py-4 text-sm text-muted">
+          결정마다 대안 3개 이상이 주어지고, 결과는 결정한 뒤에 공개됩니다. 모든 결정에는 조 토론 근거를 남깁니다.
+        </p>
+      </div>
+    </aside>
+    </div>
   );
 }

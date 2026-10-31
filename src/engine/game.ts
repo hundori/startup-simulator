@@ -15,6 +15,7 @@ import { hashString } from './rng';
 import {
   advanceMonth,
   applyEffects,
+  scaleMoney,
   evaluateOption,
   monthRecord,
   monthsAllocation,
@@ -85,7 +86,7 @@ export function toPublicOption(game: Game, option: EventOption): PublicOption {
     id: option.id,
     label: option.label,
     description: option.description,
-    cost: option.cost ?? 0,
+    cost: scaleMoney(game.sim, option.cost ?? 0),
     minHeadcount: option.minHeadcount ?? null,
     available,
     reasons,
@@ -133,7 +134,7 @@ export function submitDecision(
   if (!check.available) return { ok: false, error: check.reasons.join(' / ') };
 
   const before = snapshot(game.sim);
-  const cost = option.cost ?? 0;
+  const cost = scaleMoney(game.sim, option.cost ?? 0);
   const outcome = pickOutcome(game.sim, option);
 
   let sim = { ...game.sim, cash: game.sim.cash - cost };

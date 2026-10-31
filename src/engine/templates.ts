@@ -5,7 +5,7 @@ import type {
   SetupInput,
   SimState,
 } from './types';
-import { clamp } from './rules';
+import { clamp, scaleFor, MIN_CAPITAL } from './rules';
 
 // 교육용 가정값. 실제 업종 평균이 아니다. 금액은 만원 단위.
 
@@ -212,7 +212,8 @@ export function createInitialState(setup: SetupInput): SimState {
   const ct = CUSTOMER_TYPES[setup.customerType];
 
   const arpu = Math.round(t.arpu * rm.arpuMult * ct.arpuMult * 100) / 100;
-  const customers = Math.max(3, Math.round(t.initCustomers * rm.initMult * ct.initMult));
+  const k = scaleFor(setup.capital);
+  const customers = Math.max(3, Math.round(t.initCustomers * rm.initMult * ct.initMult * k));
 
   return {
     businessType: setup.businessType,
@@ -225,13 +226,14 @@ export function createInitialState(setup: SetupInput): SimState {
     morale: 70,
     reputation: 35,
     headcount: setup.members,
-    avgSalary: 250,
-    marketingBudget: 100,
-    overhead: t.overhead,
+    scale: k,
+    avgSalary: Math.round(250 * k * 10) / 10,
+    marketingBudget: Math.round(100 * k),
+    overhead: Math.round(t.overhead * k),
     arpu,
     cogsRatio: clamp(t.cogsRatio + rm.cogsAdd, 0.05, 0.9),
     churnRate: clamp(t.churnRate * rm.churnMult * ct.churnMult, 0.01, 0.5),
-    acqBase: Math.round(t.acqBase * rm.acqMult * ct.acqMult * 100) / 100,
+    acqBase: Math.round(t.acqBase * rm.acqMult * ct.acqMult * k * 100) / 100,
     capPerHead: Math.round(t.capPerHead * ct.capMult),
     debt: 0,
     dilution: 0,
@@ -248,8 +250,8 @@ export function validateSetup(setup: SetupInput): string[] {
   if (idea.length < 10) errors.push('사업 아이디어를 10자 이상 적어 주세요.');
   if (idea.length > 300) errors.push('사업 아이디어는 300자 이내로 적어 주세요.');
   if (setup.targetCustomer.trim().length < 2) errors.push('대상 고객을 적어 주세요.');
-  if (!Number.isFinite(setup.capital) || setup.capital < 1000 || setup.capital > 100000) {
-    errors.push('초기 자본은 1,000만원 이상 10억원 이하로 입력해 주세요.');
+  if (!Number.isFinite(setup.capital) || setup.capital < MIN_CAPITAL || setup.capital > 100000) {
+    errors.push('초기 자본은 100만원 이상 10억원 이하로 입력해 주세요.');
   }
   if (!Number.isInteger(setup.members) || setup.members < 1 || setup.members > 6) {
     errors.push('창업 멤버는 1~6명으로 입력해 주세요.');
