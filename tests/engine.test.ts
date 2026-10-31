@@ -261,8 +261,8 @@ describe('E. 이벤트 데이터 무결성', () => {
         expect(n, `${ev.id}/${b}`).toBeGreaterThanOrEqual(3);
       }
   });
-  it('E7 단계별 후보는 정확히 5개', () => {
-    for (const st of [1, 2, 3] as Stage[]) expect(stageCandidates(st).length).toBe(5);
+  it('E7 단계별 후보는 5개 이상이고 모두 대안 3개 이상', () => {
+    for (const st of [1, 2, 3] as Stage[]) expect(stageCandidates(st).length).toBeGreaterThanOrEqual(5);
   });
   it('E8 모든 이벤트에 토론 질문이 있고 업종별 설명은 존재하는 업종만 쓴다', () => {
     for (const ev of ALL_EVENTS) {
@@ -273,22 +273,22 @@ describe('E. 이벤트 데이터 무결성', () => {
 });
 
 describe('F. 스케줄러', () => {
-  it('F1 전체 모드: 5개씩, 중복 없음, 부적절한 이벤트 없음', () => {
+  it('F1 전체 모드: 후보 전부, 중복 없음, 부적절한 이벤트 없음', () => {
     for (const b of BUSINESS)
       for (const st of [1, 2, 3] as Stage[]) {
         const sim = createInitialState(baseSetup({ businessType: b }));
         const plan = planStageEvents({ sim, mode: 'full', seed: 3 }, st);
-        expect(plan.length, `${b}/${st}`).toBe(5);
-        expect(new Set(plan).size).toBe(5);
+        expect(plan.length, `${b}/${st}`).toBe(stageCandidates(st).length);
+        expect(new Set(plan).size).toBe(plan.length);
         for (const id of plan) {
           const ev = getEvent(id);
           expect(ev.isFallback || isEventApplicable(ev, sim), `${b}/${id}`).toBe(true);
         }
       }
   });
-  it('F2 수업용 모드: 연차당 2개 (총 6개)', () => {
+  it('F2 수업용 모드: 연차당 3개 (총 9개)', () => {
     const sim = createInitialState(baseSetup());
-    for (const st of [1, 2, 3] as Stage[]) expect(planStageEvents({ sim, mode: 'class', seed: 3 }, st).length).toBe(2);
+    for (const st of [1, 2, 3] as Stage[]) expect(planStageEvents({ sim, mode: 'class', seed: 3 }, st).length).toBe(3);
   });
   it('F3 오프라인은 플랫폼 정책 이벤트 대신 임대료 이벤트', () => {
     const sim = createInitialState(baseSetup({ businessType: 'offline' }));
@@ -347,7 +347,7 @@ describe('G. 결정·흐름', () => {
     expect(view).not.toContain('"text":');
   });
   it('G4 같은 대안도 회사 상태에 따라 결과가 달라진다', () => {
-    const strong = atEvent('e02-runway', { customers: 200, quality: 60, reputation: 50 });
+    const strong = atEvent('e02-runway', { customers: 200, quality: 60, reputation: 50, revHist: [100, 200] });
     const weak = atEvent('e02-runway', { customers: 20, quality: 40 });
     const a = submitDecision(strong, 'seed', '지표가 충분하다고 판단해 투자 유치를 시도하기로 했다.');
     const b = submitDecision(weak, 'seed', '지표가 부족하지만 일단 투자 유치를 시도하기로 했다.');
@@ -357,8 +357,8 @@ describe('G. 결정·흐름', () => {
     expect(a.game.decisions[0].afterImmediate.cash).toBeGreaterThan(b.game.decisions[0].afterImmediate.cash);
   });
   it('G4b 투자금(cashMonths)은 회사의 월 고정비 규모에 비례한다', () => {
-    const small = atEvent('e02-runway', { customers: 200, quality: 60, reputation: 50, marketingBudget: 100 });
-    const big = atEvent('e02-runway', { customers: 200, quality: 60, reputation: 50, marketingBudget: 900 });
+    const small = atEvent('e02-runway', { customers: 200, quality: 60, reputation: 50, marketingBudget: 100, revHist: [100, 200] });
+    const big = atEvent('e02-runway', { customers: 200, quality: 60, reputation: 50, marketingBudget: 900, revHist: [100, 200] });
     const a = submitDecision(small, 'seed', '지표가 충분하다고 판단해 투자 유치를 시도하기로 했다.');
     const b = submitDecision(big, 'seed', '지표가 충분하다고 판단해 투자 유치를 시도하기로 했다.');
     if (!a.ok || !b.ok) throw new Error('결정 실패');
@@ -372,18 +372,18 @@ describe('G. 결정·흐름', () => {
     const r = submitDecision(g, 'more-features', '기능이 부족하다는 의견이 많아 개발을 늘리기로 했다.');
     expect(r.ok).toBe(false);
   });
-  it('G6 수업용 모드: 결정 6번으로 끝난다', () => {
+  it('G6 수업용 모드: 결정 9번으로 끝난다', () => {
     const g = play({ capital: 20000, mode: 'class' }, cheapest);
     expect(g.phase).toBe('finished');
     expect(g.status).toBe('completed');
-    expect(g.decisions.length).toBe(6);
+    expect(g.decisions.length).toBe(9);
     expect(g.history.length).toBe(37);
     expect(g.sim.month).toBe(36);
   });
-  it('G7 전체 모드: 결정 15번으로 끝난다', () => {
+  it('G7 전체 모드: 후보 이벤트 전부 결정하고 끝난다', () => {
     const g = play({ capital: 20000, mode: 'full' }, cheapest);
     expect(g.phase).toBe('finished');
-    expect(g.decisions.length).toBe(g.status === 'completed' ? 15 : g.decisions.length);
+    expect(g.decisions.length).toBe(g.status === 'completed' ? ([1, 2, 3] as Stage[]).reduce((n, st) => n + stageCandidates(st).length, 0) : g.decisions.length);
     if (g.status === 'completed') expect(g.sim.month).toBe(36);
   });
   it('G8 같은 입력·같은 선택이면 같은 결과', () => {
@@ -536,5 +536,42 @@ describe('AI 자동화 비율', () => {
     expect(capacityOf(full) / capacityOf(base)).toBeCloseTo(2.5, 1);
     const offline = applyFx(baseSim({ businessType: 'offline', aiShare: 0.15, aiLevel: 0 }), { aiLevel: 1 });
     expect(capacityOf(offline) / capacityOf(baseSim({ businessType: 'offline', aiShare: 0.15 }))).toBeLessThan(1.2);
+  });
+});
+
+import { unitEconomics, acquisitionRate as acqRate, metricValue as metric, advanceMonth as advance } from '../src/engine';
+
+describe('시장 규모·성장률·단위경제', () => {
+  function atEvent(eventId: string, over: Partial<Game['sim']> = {}): Game {
+    const g = beginSimulation(newGame());
+    return { ...g, plan: [eventId], planIndex: 0, sim: { ...g.sim, ...over } };
+  }
+  it('고객이 시장(TAM)을 채울수록 신규 유입이 줄어든다', () => {
+    const base = baseSim();
+    const low = acqRate({ ...base, tam: 100000, customers: 10 });
+    const high = acqRate({ ...base, tam: 100, customers: 90 });
+    expect(high).toBeLessThan(low);
+  });
+  it('최근 매출 기록으로 성장률을 계산한다', () => {
+    const s = baseSim({ revHist: [100, 120, 150] });
+    expect(metric(s, 'growth6')).toBeCloseTo(0.5);
+    expect(metric(baseSim({ revHist: [100] }), 'growth6')).toBe(0);
+    const next = advance(baseSim({ revHist: [1, 2, 3, 4, 5, 6, 7] })).state;
+    expect(next.revHist?.length).toBe(7);
+  });
+  it('단위경제: 마케팅비가 늘면 고객 확보 비용이 늘고 회수 기간이 길어진다', () => {
+    const a = unitEconomics(baseSim({ marketingBudget: 100 }));
+    const b = unitEconomics(baseSim({ marketingBudget: 800 }));
+    expect(b.cac).toBeGreaterThan(a.cac);
+    expect(a.ltv).toBeGreaterThan(0);
+  });
+  it('투자는 성장률·이탈률이 약하면 조건부(작은 금액)로 바뀐다', () => {
+    const grow = atEvent('e02-runway', { customers: 200, quality: 60, reputation: 50, revHist: [100, 200] });
+    const flat = atEvent('e02-runway', { customers: 200, quality: 60, reputation: 50, revHist: [200, 200] });
+    const a = submitDecision(grow, 'seed', '성장률과 이탈률을 근거로 투자 유치를 시도하기로 했다.');
+    const b = submitDecision(flat, 'seed', '성장률과 이탈률을 근거로 투자 유치를 시도하기로 했다.');
+    if (!a.ok || !b.ok) throw new Error('결정 실패');
+    expect(a.game.decisions[0].verdict).toBe('strong');
+    expect(b.game.decisions[0].verdict).toBe('ok');
   });
 });

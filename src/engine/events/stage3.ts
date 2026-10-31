@@ -26,13 +26,19 @@ export const STAGE3_EVENTS: GameEvent[] = [
         cost: 300,
         outcomes: [
           {
-            when: [gte('customers', 300), gte('quality', 50)],
+            when: [gte('customers', 300), gte('quality', 50), gte('growth6', 0.2), lte('churnRate', 0.07)],
             effects: { cashMonths: 24, dilution: 25, morale: 4, flags: ['seriesA', 'aggressive-target'] },
             text: '대규모 자금을 확보했지만 높은 성장 목표가 걸려 있어 이후 의사결정의 자유가 줄었습니다.',
             verdict: 'ok',
           },
           {
-            effects: { cashMonths: 14, dilution: 30, morale: -3, flags: ['seriesA', 'aggressive-target'] },
+            when: [gte('customers', 200)],
+            effects: { cashMonths: 14, dilution: 28, morale: -2, flags: ['seriesA', 'milestone-tranche'] },
+            text: '성장률·이탈률이 기준에 못 미쳐 목표를 달성하면 나눠서 입금하는 조건부 투자가 됐습니다. 금액은 줄고 희석은 컸습니다.',
+            verdict: 'weak',
+          },
+          {
+            effects: { cashMonths: 10, dilution: 32, morale: -3, flags: ['seriesA', 'aggressive-target'] },
             text: '지표 대비 높은 목표가 설정되어 이후 압박이 커졌고, 지분 희석도 컸습니다.',
             verdict: 'weak',
           },
@@ -45,7 +51,7 @@ export const STAGE3_EVENTS: GameEvent[] = [
         cost: 400,
         outcomes: [
           {
-            when: [gte('reputation', 50), gte('customers', 200)],
+            when: [gte('reputation', 50), gte('customers', 200), gte('growth6', 0.1)],
             effects: { cashMonths: 20, dilution: 18, morale: 3, reputation: 3, acqBasePct: -0.04, flags: ['seriesA'] },
             text: '협상으로 희석과 목표를 낮추고도 투자를 받았습니다. 다만 협상에 매달린 두 달 동안 영업과 제품 개선이 느려졌습니다.',
             verdict: 'strong',
@@ -418,6 +424,94 @@ export const STAGE3_EVENTS: GameEvent[] = [
             effects: { morale: -1, flags: ['wait'] },
             text: '결정을 미루는 사이 제안 조건이 약해졌고, 팀 안에서도 불확실성이 커졌습니다.',
             verdict: 'weak',
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'e12b-ai-shift',
+    stage: 3,
+    order: 12.5,
+    title: 'AI 비용·규제 변화',
+    reason: 'legal',
+    weight: 2,
+    boosts: [{ when: [gte('aiLevel', 0.3)], add: 3 }],
+    situation:
+      '{company}이 쓰는 AI 서비스의 가격이 오르고, 고객 데이터를 AI로 처리하는 방식에 대한 개인정보·저작권 규제 지침이 강화됐습니다. 경쟁사는 AI로 원가를 낮춰 가격을 내리고 있습니다. 우리 고객 정보가 어디서 어떻게 쓰이는지 점검해야 합니다.',
+    discussionPrompts: [
+      'AI가 실수하거나 정보가 새면 책임은 누가 지고 어떻게 되돌리는가?',
+      '한 공급사에 의존하면 가격이 오를 때 무엇을 할 수 있는가?',
+      'AI로 줄인 비용을 고객 신뢰와 맞바꾸고 있지는 않은가?',
+    ],
+    options: [
+      {
+        id: 'audit',
+        label: '데이터 정책을 정비하고 사람 검수를 유지',
+        description: '약관·개인정보 처리 방침을 고치고 중요한 판단은 사람이 확인한다. 비용과 시간이 든다.',
+        cost: 300,
+        outcomes: [
+          {
+            when: [gte('aiLevel', 0.3)],
+            effects: { reputation: 3, overhead: 20, quality: 1, flags: ['ai-governance'] },
+            text: 'AI를 많이 쓰는 회사로서 문제가 커지기 전에 기준과 책임 절차를 세웠습니다. 고객 신뢰가 올랐고 월 운영비가 조금 늘었습니다.',
+            verdict: 'strong',
+          },
+          {
+            effects: { reputation: 1, overhead: 20, flags: ['ai-governance'] },
+            text: 'AI를 많이 쓰지 않아 급한 문제는 아니었지만, 미리 기준을 세워 둔 것이 신뢰에 도움이 됐습니다.',
+            verdict: 'ok',
+          },
+        ],
+      },
+      {
+        id: 'ai-deeper',
+        label: 'AI를 더 넓게 도입해 비용을 줄인다',
+        description: '규제는 나중에 대응하고 자동화 비율을 높여 원가와 인건비 부담을 낮춘다.',
+        cost: 200,
+        outcomes: [
+          {
+            when: [gte('aiLevel', 0.5)],
+            effects: { aiLevel: 0.2, quality: -4, reputation: -6, churnRate: 0.01, flags: ['ai-overreach'] },
+            text: '이미 많이 맡긴 상태에서 더 넓히자 오류와 정보 처리 문제가 불거졌습니다. 비용은 줄었지만 고객 신뢰를 크게 잃었습니다.',
+            verdict: 'weak',
+          },
+          {
+            effects: { aiLevel: 0.25, overhead: -10, quality: -1, flags: ['ai-deeper'] },
+            text: '아직 여유가 있는 범위에서 자동화를 늘려 비용을 아꼈습니다. 다만 사람이 확인하는 절차가 얇아졌습니다.',
+            verdict: 'ok',
+          },
+        ],
+      },
+      {
+        id: 'multi-vendor',
+        label: '공급사를 나누고 핵심 기능은 직접 갖춘다',
+        description: '여러 AI 공급사를 병행하고 중요한 부분은 자체 개발한다. 비용이 늘지만 가격 인상과 장애에 덜 흔들린다.',
+        cost: 500,
+        outcomes: [
+          {
+            effects: { overhead: 50, aiLevel: 0.1, quality: 2, reputation: 2, flags: ['multi-vendor'] },
+            text: '공급사 한 곳에 묶여 있지 않아 가격 인상에도 협상력이 생겼습니다. 대신 개발·운영 부담이 늘었습니다.',
+            verdict: 'ok',
+          },
+        ],
+      },
+      {
+        id: 'no-action',
+        label: '당장은 대응하지 않고 지켜본다',
+        description: '지침이 확정될 때까지 현재 방식을 유지한다. 비용은 들지 않는다.',
+        cost: 0,
+        outcomes: [
+          {
+            when: [gte('aiLevel', 0.3)],
+            effects: { reputation: -5, churnRate: 0.01, quality: -2, flags: ['ai-risk-ignored'] },
+            text: 'AI를 이미 많이 쓰고 있었는데 대응이 늦어 고객 불만과 정보 처리 논란이 생겼습니다. 규제는 기다려 주지 않았습니다.',
+            verdict: 'weak',
+          },
+          {
+            effects: { morale: 0 },
+            text: 'AI 의존이 낮아 직접적인 영향은 적었습니다. 다만 경쟁사의 AI 원가 절감은 그대로 지켜봐야 했습니다.',
+            verdict: 'ok',
           },
         ],
       },

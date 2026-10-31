@@ -73,6 +73,10 @@ export interface SimState {
   aiShare?: number;
   /** AI 도입 정도(0~1). 1이면 상한까지 자동화했다는 뜻. 이전 저장본에는 없다(=0). */
   aiLevel?: number;
+  /** 우리가 겨냥한 시장에서 얻을 수 있는 최대 고객 수(규모 반영). 고객이 이에 가까워질수록 신규 유입이 줄어든다. 이전 저장본에는 없다. */
+  tam?: number;
+  /** 최근 월 매출 기록(최대 7개월). 성장률 계산용. 이전 저장본에는 없다. */
+  revHist?: number[];
   /** 소액 창업 규모 배율(0.02~1). 초기 자본이 5,000만원 미만이면 금액·고객 규모를 함께 줄인다. 이전 저장본에는 없다(=1). */
   scale?: number;
   flags: string[];
@@ -94,6 +98,10 @@ export type CondMetric =
   | 'monthlyProfit'
   | 'aiShare'
   | 'aiLevel'
+  | 'growth6'
+  | 'churnRate'
+  | 'grossMargin'
+  | 'share'
   | 'month';
 export type CondOp = '>=' | '<=' | '>' | '<';
 export type Cond =
@@ -117,6 +125,7 @@ export interface Effects {
   cogsRatio?: number;
   capPerHeadPct?: number;
   aiLevel?: number; // AI 도입 정도 증감(0~1 범위로 제한)
+  tamPct?: number; // 겨냥 시장 규모 증감(틈새 집중은 줄이고, 새 시장 진출은 늘린다)
   debt?: number;
   dilution?: number;
   flags?: string[];

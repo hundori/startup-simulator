@@ -18,7 +18,7 @@ npm run balance    # 전략×업종 밸런스 점검
 - `docs/` : PRD, 화면, 데이터 모델, 이벤트, 규칙, 테스트 케이스.
 
 ## 진행 방식
-수업용(기본): 연차마다 후보 5개 중 상황에 맞는 2개 = 총 6개. 전체: 연차당 5개 = 총 15개. 시작 시 선택.
+수업용(기본): 연차마다 후보 중 상황에 맞는 3개 = 총 9개. 전체: 후보 모두 = 총 19개(1년 차 6, 2년 차 7, 3년 차 6). 시작 시 선택.
 
 ## Supabase 전환
 `StorageAdapter`를 구현하고 `GameApp`의 `storage`를 교체한다. 테이블: `games(id uuid, owner uuid, data jsonb, updated_at timestamptz)` + RLS(owner). 주의: 효과 수치가 클라이언트 번들에 포함되어 있으므로, 학생에게 숨겨야 한다면 `submitDecision`을 서버(Route Handler)로 옮긴다.

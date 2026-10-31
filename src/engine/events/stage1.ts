@@ -1,5 +1,5 @@
 import type { GameEvent } from '../types';
-import { gte, lte, lt } from './helpers';
+import { gte, lt, lte } from './helpers';
 
 // 1년 차 — 생존. 효과 수치는 교육용 가정이다.
 export const STAGE1_EVENTS: GameEvent[] = [
@@ -110,15 +110,15 @@ export const STAGE1_EVENTS: GameEvent[] = [
         cost: 200,
         outcomes: [
           {
-            when: [gte('customers', 150), gte('quality', 50), gte('reputation', 40)],
+            when: [gte('customers', 150), gte('quality', 50), gte('reputation', 40), gte('growth6', 0.15), lte('churnRate', 0.08)],
             effects: { cashMonths: 18, dilution: 15, acqBasePct: -0.03, reputation: 3, morale: 6, flags: ['seed'] },
-            text: '지표가 투자자의 기준을 넘어 18개월가량 버틸 금액으로 시드 라운드를 마쳤습니다. 대신 지분 15%를 내주고 분기별 보고 의무가 생겼으며, 유치에 매달린 몇 달 동안 신규 고객 유입은 둔해졌습니다.',
+            text: '고객 수·품질에 더해 성장률과 이탈률까지 투자자의 기준을 넘어 18개월가량 버틸 금액으로 시드 라운드를 마쳤습니다. 대신 지분 15%를 내주고 분기별 보고 의무가 생겼으며, 유치에 매달린 몇 달 동안 신규 고객 유입은 둔해졌습니다.',
             verdict: 'strong',
           },
           {
             when: [gte('customers', 60)],
             effects: { cashMonths: 9, dilution: 10, acqBasePct: -0.03, morale: 2, flags: ['seed-small'] },
-            text: '기대보다 작은 금액(약 9개월치)으로 브릿지 투자를 받았습니다. 숨통은 트였지만 곧 다음 투자를 다시 준비해야 합니다.',
+            text: '성장률이나 이탈률이 기준에 못 미쳐 \"다음 지표를 달성하면 추가 투자\"라는 조건부로 작은 금액(약 9개월치)만 받았습니다. 숨통은 트였지만 곧 다음 투자를 다시 준비해야 합니다.',
             verdict: 'ok',
           },
           {
@@ -522,6 +522,99 @@ export const STAGE1_EVENTS: GameEvent[] = [
             effects: { reputation: 4, quality: 3, overhead: 10, flags: ['sla'] },
             text: '투명한 공개가 오히려 신뢰를 높였고, 기업 고객이 계약 근거로 삼기 쉬워졌습니다.',
             verdict: 'strong',
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'e05b-pivot-or-stop',
+    stage: 1,
+    order: 5.5,
+    title: '피벗할 것인가, 접을 것인가',
+    reason: 'bad-pivot',
+    weight: 2,
+    situation:
+      '{company}의 핵심 가설("{idea}")을 시험한 지 몇 달이 지났습니다. {target} 중 돈을 내는 사람은 기대보다 적고 성장도 더딥니다. 팀 안에서는 "조금만 더 해 보자", "방향을 바꾸자", "더 잃기 전에 접자"는 의견이 갈립니다.',
+    discussionPrompts: [
+      '우리가 틀렸다는 증거와 아직 모른다는 증거를 나눠 적어 보면 각각 무엇인가?',
+      '6개월을 더 쓰면 무엇을 알게 되고, 그 정보에 그만한 값어치가 있는가?',
+      '접거나 방향을 바꾸는 것이 실패인가, 아니면 남은 자원을 지키는 결정인가?',
+    ],
+    options: [
+      {
+        id: 'persist',
+        label: '같은 방향으로 6개월 더 밀어붙인다',
+        description: '가설이 맞다고 믿고 지금 하던 대로 계속한다. 추가 비용은 없지만 시간과 현금이 그만큼 더 쓰인다.',
+        cost: 0,
+        outcomes: [
+          {
+            when: [gte('growth6', 0.2), gte('quality', 50)],
+            effects: { morale: 2, reputation: 1, flags: ['persisted'] },
+            text: '성장 신호가 이미 보이는 상태였고, 끈기가 결과로 이어졌습니다. 다만 "끈기"가 맞았는지는 결과를 보고서야 알 수 있었습니다.',
+            verdict: 'ok',
+          },
+          {
+            effects: { morale: -4, acqBasePct: -0.05, flags: ['persisted'] },
+            text: '지표가 그대로인 채 6개월이 지났습니다. 현금은 줄었고 팀은 지쳤습니다. 가설이 틀렸다는 신호를 늦게 받아들인 대가입니다.',
+            verdict: 'weak',
+          },
+        ],
+      },
+      {
+        id: 'narrow',
+        label: '고객군과 가치 제안을 좁혀 방향을 조정한다',
+        description: '가장 반응이 좋았던 하나의 고객군에 집중하고 나머지는 접는다. 시장은 작아지지만 이탈과 유입 효율이 좋아질 수 있다.',
+        cost: 150,
+        outcomes: [
+          {
+            when: [gte('customers', 40), gte('quality', 45)],
+            effects: { customersPct: -0.15, churnRate: -0.01, acqBasePct: 0.15, tamPct: -0.3, quality: 3, morale: 2, flags: ['pivot-narrow'] },
+            text: '반응이 좋던 고객군에 집중하자 이탈이 줄고 유입 효율이 좋아졌습니다. 대신 겨냥하는 시장이 작아져 규모의 한계가 일찍 올 수 있습니다.',
+            verdict: 'strong',
+          },
+          {
+            effects: { customersPct: -0.2, tamPct: -0.3, morale: -1, flags: ['pivot-narrow'] },
+            text: '집중할 만큼 확실한 고객군이 아직 없어 좁힌 범위에서도 반응이 약했습니다. 시장은 작아졌고 근거는 부족했습니다.',
+            verdict: 'ok',
+          },
+        ],
+      },
+      {
+        id: 'new-market',
+        label: '완전히 다른 고객·시장으로 전면 피벗',
+        description: '지금까지 쌓은 것을 상당 부분 버리고 새 시장에 다시 도전한다. 비용이 크고 기존 고객은 많이 떠난다.',
+        cost: 400,
+        outcomes: [
+          {
+            when: [gte('cash', 3000), gte('morale', 55)],
+            effects: { customersPct: -0.5, tamPct: 0.5, acqBasePct: 0.12, morale: -4, reputation: -3, flags: ['pivot-new'] },
+            text: '현금과 팀 사기가 버텨 줘서 새 시장에서 다시 시작할 수 있었습니다. 기존 고객의 절반이 떠났고 평판도 일부 잃었지만, 더 큰 시장을 열었습니다.',
+            verdict: 'ok',
+          },
+          {
+            effects: { customersPct: -0.6, tamPct: 0.5, morale: -8, reputation: -5, flags: ['pivot-new'] },
+            text: '현금과 팀 사기가 부족한 채 전면 피벗을 했습니다. 기존 고객은 떠났고 새 시장의 검증은 아직이어서 팀이 크게 흔들렸습니다.',
+            verdict: 'weak',
+          },
+        ],
+      },
+      {
+        id: 'stop-loss',
+        label: '사업을 줄여 손실을 끊고 작게 다시 시작한다',
+        description: '인력과 마케팅을 줄이고 현금을 지킨 채 가장 작은 단위로 다시 시험한다. 일찍 멈추는 대신 속도는 포기한다.',
+        cost: 0,
+        outcomes: [
+          {
+            when: [lte('runway', 8)],
+            effects: { cash: 300, headcount: -1, marketingBudget: -60, overhead: -40, customersPct: -0.1, morale: -2, reputation: 1, flags: ['stop-loss'] },
+            text: '현금이 바닥나기 전에 손실을 끊어 더 오래 시험할 시간을 벌었습니다. 속도는 느려졌지만 같은 돈으로 더 많은 실험을 할 수 있게 됐습니다.',
+            verdict: 'strong',
+          },
+          {
+            effects: { cash: 200, headcount: -1, marketingBudget: -60, overhead: -40, customersPct: -0.15, morale: -4, flags: ['stop-loss'] },
+            text: '아직 여유가 있는 상태에서 줄이는 바람에 성장 기회와 팀원을 잃었습니다. 판단은 안전했지만 너무 일렀을 수 있습니다.',
+            verdict: 'ok',
           },
         ],
       },

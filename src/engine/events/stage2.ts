@@ -604,4 +604,186 @@ export const STAGE2_EVENTS: GameEvent[] = [
       },
     ],
   },
+  {
+    id: 'e06c-competitor',
+    stage: 2,
+    order: 6.5,
+    title: '경쟁자 출현',
+    reason: 'outcompeted',
+    weight: 2,
+    boosts: [{ when: [gte('share', 0.1)], add: 1 }],
+    situation:
+      '{target}를 겨냥한 비슷한 서비스가 자금력 있는 경쟁사에서 나왔습니다. {company}보다 낮은 가격에 무료 체험까지 내세웁니다. 우리 고객 일부가 "저쪽은 더 싸던데요"라고 말하기 시작했습니다.',
+    discussionPrompts: [
+      '고객이 우리를 택하는 이유 중 경쟁사가 따라 할 수 없는 것은 무엇인가?',
+      '가격으로 맞서면 누가 먼저 현금이 바닥나는가?',
+      '모두를 지키려는 것과 일부를 확실히 지키는 것 중 어느 쪽이 우리에게 맞는가?',
+    ],
+    options: [
+      {
+        id: 'price-match',
+        label: '가격을 내려 맞대응',
+        description: '경쟁사와 비슷한 가격으로 내려 이탈을 막는다. 고객 1명당 매출과 이익이 줄어든다.',
+        cost: 300,
+        outcomes: [
+          {
+            when: [gte('monthlyProfit', 1)],
+            effects: { arpuPct: -0.12, churnRate: -0.006, reputation: 1, flags: ['price-war'] },
+            text: '이익이 나는 구조라 버틸 수 있었고 이탈은 줄었습니다. 다만 한 번 내린 가격은 다시 올리기 어렵습니다.',
+            verdict: 'ok',
+          },
+          {
+            effects: { arpuPct: -0.15, churnRate: -0.003, morale: -3, flags: ['price-war'] },
+            text: '적자 상태에서 가격을 내려 고객은 지켰지만 한 명이 늘 때마다 손실이 커졌습니다. 가격 전쟁에서 먼저 지치는 쪽은 현금이 적은 쪽입니다.',
+            verdict: 'weak',
+          },
+        ],
+      },
+      {
+        id: 'niche',
+        label: '가장 반응 좋은 고객군에 집중 (틈새 방어)',
+        description: '모든 고객이 아니라 우리를 가장 좋아하는 고객군에 기능·메시지·응대를 맞춘다. 시장은 작아진다.',
+        cost: 200,
+        outcomes: [
+          {
+            when: [gte('quality', 50)],
+            effects: { tamPct: -0.35, churnRate: -0.012, quality: 4, arpuPct: 0.05, reputation: 2, flags: ['niche'] },
+            text: '핵심 고객군은 오히려 단단해졌고 이탈이 줄었습니다. 대신 겨냥하는 시장이 줄어 성장 상한도 낮아졌습니다.',
+            verdict: 'strong',
+          },
+          {
+            effects: { tamPct: -0.35, churnRate: -0.004, morale: -1, flags: ['niche'] },
+            text: '집중은 했지만 품질 우위가 약해 효과는 제한적이었습니다. 시장만 좁아진 셈입니다.',
+            verdict: 'ok',
+          },
+        ],
+      },
+      {
+        id: 'differentiate',
+        label: '품질·고객 경험에 투자해 차별화',
+        description: '가격 대신 제품과 서비스 품질로 경쟁한다. 투자와 월 비용이 늘고 효과는 시간이 걸린다.',
+        cost: 500,
+        outcomes: [
+          {
+            effects: { quality: 7, reputation: 3, overhead: 30, churnRate: -0.006, flags: ['differentiated'] },
+            text: '품질 격차가 벌어지자 가격이 비싸도 남는 고객이 늘었습니다. 다만 효과가 보이기까지 몇 달 동안 월 고정비가 부담이었습니다.',
+            verdict: 'strong',
+          },
+        ],
+      },
+      {
+        id: 'ignore',
+        label: '대응하지 않고 하던 대로 한다',
+        description: '경쟁사는 일시적이라 보고 현재 전략을 유지한다. 비용이 들지 않는다.',
+        cost: 0,
+        outcomes: [
+          {
+            when: [lte('share', 0.1), gte('reputation', 55)],
+            effects: { morale: 1 },
+            text: '아직 시장에 여유가 있고 평판이 탄탄해 큰 영향은 없었습니다. 다만 다음에도 같을지는 알 수 없습니다.',
+            verdict: 'ok',
+          },
+          {
+            effects: { acqBasePct: -0.18, churnRate: 0.01, reputation: -2, flags: ['ignored-competitor'] },
+            text: '경쟁사가 빠르게 고객을 가져가 신규 유입이 줄고 이탈이 늘었습니다. 대응하지 않는 것도 하나의 결정이었습니다.',
+            verdict: 'weak',
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 'e07c-growth-push',
+    stage: 2,
+    order: 7.5,
+    title: '성장 압박: 더 빨리 키울 것인가',
+    reason: 'poor-marketing',
+    weight: 2,
+    boosts: [{ when: [gte('runway', 8)], add: 1 }],
+    situation:
+      '멘토와 투자자, 심지어 경쟁사까지 "{company}도 지금 빨리 키워야 한다"고 말합니다. 광고비를 크게 늘리면 고객은 빠르게 늘겠지만, 고객 한 명을 데려오는 비용이 그 고객이 남기는 이익보다 클 수도 있습니다.',
+    discussionPrompts: [
+      '고객 1명을 얻는 데 드는 비용(CAC)과 그 고객이 남기는 이익(LTV)을 각각 얼마로 보는가?',
+      '광고를 끊으면 고객은 남는가, 같이 사라지는가?',
+      '지금 속도를 유지하는 것은 안정인가, 정체인가?',
+    ],
+    options: [
+      {
+        id: 'ads-heavy',
+        label: '마케팅 예산을 크게 늘려 빠르게 성장',
+        description: '월 마케팅비를 크게 올리고 고객을 공격적으로 확보한다. 고객 확보 비용과 이탈률이 중요하다.',
+        cost: 600,
+        outcomes: [
+          {
+            when: [lte('churnRate', 0.07), gte('grossMargin', 0.5)],
+            effects: { marketingBudget: 200, customersPct: 0.3, acqBasePct: 0.08, reputation: 1, flags: ['growth-push'] },
+            text: '이탈이 낮고 마진이 충분해 광고비 대비 고객이 남았습니다. 확보 비용을 회수하는 구조에서 빠르게 성장했습니다.',
+            verdict: 'strong',
+          },
+          {
+            effects: { marketingBudget: 200, customersPct: 0.15, churnRate: 0.01, morale: -2, flags: ['growth-push'] },
+            text: '고객은 늘었지만 이탈이 높고 마진이 얇아 광고를 멈추자 고객도 함께 줄었습니다. 돈으로 산 성장은 구조가 받쳐 줄 때만 남습니다.',
+            verdict: 'weak',
+          },
+        ],
+      },
+      {
+        id: 'referral',
+        label: '입소문·추천 구조를 만든다',
+        description: '고객이 고객을 데려오는 장치(추천 보상, 공유 기능)를 만든다. 효과는 느리지만 확보 비용이 낮아진다.',
+        cost: 250,
+        outcomes: [
+          {
+            when: [gte('quality', 55)],
+            effects: { acqBasePct: 0.14, churnRate: -0.004, reputation: 2, flags: ['referral'] },
+            text: '제품이 만족스러워 추천이 실제로 이어졌습니다. 성장은 완만했지만 비용 대비 효율이 좋았습니다.',
+            verdict: 'strong',
+          },
+          {
+            effects: { acqBasePct: 0.05, reputation: 0 },
+            text: '추천할 만큼 만족한 고객이 아직 적어 효과가 작았습니다. 구조보다 제품이 먼저일 수 있습니다.',
+            verdict: 'ok',
+          },
+        ],
+      },
+      {
+        id: 'fix-unit-econ',
+        label: '단위경제부터 고친다 (가격·원가·이탈)',
+        description: '성장을 잠시 미루고 고객 1명당 이익과 이탈을 개선한다. 눈에 보이는 성장은 느려진다.',
+        cost: 150,
+        outcomes: [
+          {
+            when: [lte('monthlyProfit', 0)],
+            effects: { arpuPct: 0.06, cogsRatio: -0.03, churnRate: -0.006, acqBasePct: -0.05, morale: -1, flags: ['unit-econ'] },
+            text: '적자 구조의 원인을 먼저 줄였습니다. 성장은 한동안 느려졌지만 이제 고객이 늘수록 이익이 나는 구조에 가까워졌습니다.',
+            verdict: 'strong',
+          },
+          {
+            effects: { arpuPct: 0.04, cogsRatio: -0.02, churnRate: -0.004, acqBasePct: -0.05 },
+            text: '이미 이익이 나는 구조에서 성장을 늦춰 시장을 선점할 기회를 일부 놓쳤습니다.',
+            verdict: 'ok',
+          },
+        ],
+      },
+      {
+        id: 'hold-pace',
+        label: '지금 속도를 유지한다',
+        description: '추가 투자 없이 현재 마케팅과 운영을 그대로 둔다.',
+        cost: 0,
+        outcomes: [
+          {
+            when: [gte('growth6', 0.15)],
+            effects: { morale: 1 },
+            text: '지금 속도로도 성장이 이어지고 있어 서두를 이유가 크지 않았습니다.',
+            verdict: 'ok',
+          },
+          {
+            effects: { acqBasePct: -0.08, reputation: -1, morale: -2, flags: ['stalled'] },
+            text: '성장이 정체된 채 같은 속도를 유지해 경쟁사에 점점 밀렸습니다. 아무것도 바꾸지 않은 것도 선택이었습니다.',
+            verdict: 'weak',
+          },
+        ],
+      },
+    ],
+  },
 ];

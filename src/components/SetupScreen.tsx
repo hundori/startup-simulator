@@ -230,8 +230,8 @@ export default function SetupScreen({
         <div className="mt-3 space-y-2">
           {(
             [
-              ['class', '수업용 · 연차당 2개, 총 6개 이벤트', '연차마다 5개 후보 중 우리 회사 상황에 맞는 2개가 나옵니다.'],
-              ['full', '전체 · 연차당 5개, 총 15개 이벤트', '후보 이벤트를 모두 진행합니다. 시간이 더 걸립니다.'],
+              ['class', '수업용 · 연차당 3개, 총 9개 이벤트', '연차마다 후보 중 우리 회사 상황에 맞는 3개가 나옵니다.'],
+              ['full', '전체 · 후보 이벤트 모두(총 19개)', '1년 차 6개, 2년 차 7개, 3년 차 6개를 모두 진행합니다. 시간이 더 걸립니다.'],
             ] as [GameMode, string, string][]
           ).map(([k, title, desc]) => (
             <Choice key={k} name="mode" checked={form.mode === k} onChange={() => set('mode', k)} title={title}>

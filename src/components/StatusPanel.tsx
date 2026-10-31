@@ -10,6 +10,7 @@ import {
   monthlyInterest,
   payroll,
   previewRunway,
+  unitEconomics,
   utilization,
 } from '@/engine';
 import { Badge } from './ui';
@@ -160,6 +161,7 @@ export default function StatusPanel({ game, previewCost = null }: { game: Game; 
     : null;
   const t = BUSINESS_TYPES[game.setup.businessType];
   const util = utilization(sim);
+  const ue = unitEconomics(sim);
   const fixed = payroll(sim) + sim.overhead + sim.marketingBudget + monthlyInterest(sim);
 
   const items: {
@@ -259,6 +261,11 @@ export default function StatusPanel({ game, previewCost = null }: { game: Game; 
             인력 {sim.headcount}명 · 월 고정비 {formatMoney(fixed)}
           </p>
           <p className="num">가동률 {Math.round(util * 100)}%</p>
+          <p className="num" title="고객 1명 확보 비용 = 마케팅비 ÷ 월 신규 고객. 생애 가치 = 월 이익 ÷ 이탈률. 모두 추정입니다.">
+            고객 확보 비용 {ue.cac < 1 ? '1만원 미만' : formatMoney(Math.round(ue.cac))} · 생애 가치 {formatMoney(Math.round(ue.ltv))}
+            {ue.ratio !== null ? ` (${ue.ratio.toFixed(1)}배${ue.payback !== null ? `, 회수 ${ue.payback.toFixed(1)}개월` : ''})` : ''}
+          </p>
+          {ue.ratio !== null && ue.ratio < 3 ? <p className="text-xs text-warn">생애 가치가 확보 비용의 3배 미만이면 마케팅을 늘릴수록 손해일 수 있습니다.</p> : null}
           <p className="num">
             AI가 맡은 업무 {Math.round(aiAutomated(sim) * 100)}% (업종 상한 {Math.round((sim.aiShare ?? 0.3) * 100)}%)
           </p>

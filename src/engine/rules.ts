@@ -84,7 +84,9 @@ export function acquisitionRate(s: SimState): number {
   const qual = 0.6 + (0.8 * s.quality) / 100;
   const cap = u <= 1 ? 1 : Math.max(0.2, 1 - (u - 1));
   const net = s.businessType === 'platform' ? 1 + Math.min(1.5, s.customers / 3000) : 1;
-  return s.acqBase * (1 + s.marketingBudget / MKT_REF) * rep * qual * cap * net;
+  // 시장 포화: 고객이 겨냥 시장(TAM)을 채울수록 신규 유입이 줄어든다.
+  const sat = s.tam ? Math.max(0.15, 1 - s.customers / s.tam) : 1;
+  return s.acqBase * (1 + s.marketingBudget / MKT_REF) * rep * qual * cap * net * sat;
 }
 
 export function effectiveChurn(s: SimState): number {
@@ -103,6 +105,18 @@ export function metricValue(s: SimState, metric: CondMetric): number {
     }
     case 'monthlyProfit':
       return projectedMonthlyProfit(s) / scaleOf(s);
+    case 'growth6': {
+      const h = s.revHist ?? [];
+      if (h.length < 2) return 0;
+      const base = Math.max(1, h[0]);
+      return h[h.length - 1] / base - 1;
+    }
+    case 'churnRate':
+      return effectiveChurn(s);
+    case 'grossMargin':
+      return 1 - s.cogsRatio;
+    case 'share':
+      return s.tam ? s.customers / s.tam : 0;
     case 'aiShare':
       return s.aiShare ?? DEFAULT_AI_SHARE;
     case 'aiLevel':
@@ -234,6 +248,7 @@ export function advanceMonth(s: SimState): MonthResult {
     churnRate: clamp(s.churnRate + MARKET_CHURN_DRIFT * (s.pressure ?? 1), 0.01, 0.5),
     acqBase: Math.round(s.acqBase * (1 - MARKET_ACQ_DECAY * (s.pressure ?? 1)) * 100) / 100,
     insolvencyMonths: cash < 0 ? s.insolvencyMonths + 1 : 0,
+    revHist: [...(s.revHist ?? [s.monthlyRevenue]), revenue].slice(-7),
   };
   const bankrupt = isBankrupt(next);
   if (bankrupt) {
@@ -281,6 +296,7 @@ export function applyEffects(s: SimState, e: Effects): SimState {
     cogsRatio: clamp(s.cogsRatio + (e.cogsRatio ?? 0), 0, 0.95),
     capPerHead: Math.max(1, Math.round(s.capPerHead * (1 + (e.capPerHeadPct ?? 0)))),
     aiLevel: clamp((s.aiLevel ?? 0) + (e.aiLevel ?? 0), 0, 1),
+    tam: s.tam ? Math.max(10, Math.round(s.tam * (1 + (e.tamPct ?? 0)))) : s.tam,
     debt: Math.max(0, s.debt + scaleMoney(s, e.debt ?? 0)),
     dilution: clamp(s.dilution + (e.dilution ?? 0), 0, 90),
     flags,
@@ -331,4 +347,16 @@ export function previewRunway(s: SimState, cost: number): { cashAfter: number; m
   if (cashAfter <= 0) return { cashAfter, months: 0 };
   const profit = projectedMonthlyProfit(s);
   return { cashAfter, months: profit >= 0 ? null : cashAfter / -profit };
+}
+
+/** 단위경제 추정: 고객 1명 확보 비용(마케팅비 ÷ 월 신규 고객), 고객 생애 가치(월 이익 ÷ 이탈률), 회수 개월 */
+export function unitEconomics(s: SimState): { cac: number; ltv: number; payback: number | null; ratio: number | null } {
+  const monthlyMargin = s.arpu * (1 - s.cogsRatio);
+  const acquired = Math.max(1, acquisitionRate(s));
+  const cac = s.marketingBudget / acquired;
+  const churn = Math.max(0.01, effectiveChurn(s));
+  const ltv = monthlyMargin / churn;
+  const payback = monthlyMargin > 0 && cac > 0 ? cac / monthlyMargin : null;
+  const ratio = cac > 0 ? ltv / cac : null;
+  return { cac, ltv, payback, ratio };
 }

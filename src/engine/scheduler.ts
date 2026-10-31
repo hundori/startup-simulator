@@ -3,7 +3,7 @@ import { evalConds } from './rules';
 import { EVENT_MAP, stageCandidates } from './events';
 import { hashString, seededRandom } from './rng';
 
-export const CLASS_MODE_EVENTS_PER_STAGE = 2;
+export const CLASS_MODE_EVENTS_PER_STAGE = 3;
 
 /** 업종·상태 조건에 맞는 이벤트인가 */
 export function isEventApplicable(ev: GameEvent, sim: SimState): boolean {
