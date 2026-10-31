@@ -1,12 +1,12 @@
 
 type Kpi = { k: string; v: string; color: string; icon: string; pos: string; rot: number; delay: number };
 const KPIS: Kpi[] = [
-  { k: '현금', v: '1억원', color: '#34b765', icon: '$', pos: 'left-[6%] top-[22%]', rot: -2, delay: 0 },
-  { k: '월 소진액', v: '1,200만/월', color: '#e5484d', icon: '▲', pos: 'left-[41%] top-[0%]', rot: 1.5, delay: 0.8 },
-  { k: '고객', v: '0', color: '#4f7cf0', icon: '◎', pos: 'right-[4%] top-[18%]', rot: 2, delay: 1.4 },
-  { k: '매출', v: '0원', color: '#a15cf0', icon: '↗', pos: 'left-[1%] bottom-[4%]', rot: -1.5, delay: 0.4 },
-  { k: '팀', v: '3명', color: '#2bb3d6', icon: '‹›', pos: 'left-[36%] bottom-[-4%]', rot: 1, delay: 1.1 },
-  { k: '평판', v: '50', color: '#e8a33d', icon: '★', pos: 'right-[8%] bottom-[2%]', rot: -2, delay: 1.8 },
+  { k: 'Cash', v: '$100K', color: '#34b765', icon: '$', pos: 'left-[6%] top-[22%]', rot: -2, delay: 0 },
+  { k: 'Burn Rate', v: '$12K/mo', color: '#e5484d', icon: '▲', pos: 'left-[41%] top-[0%]', rot: 1.5, delay: 0.8 },
+  { k: 'Customers', v: '0', color: '#4f7cf0', icon: '◎', pos: 'right-[4%] top-[18%]', rot: 2, delay: 1.4 },
+  { k: 'Revenue', v: '$0', color: '#a15cf0', icon: '↗', pos: 'left-[1%] bottom-[4%]', rot: -1.5, delay: 0.4 },
+  { k: 'Team', v: '3', color: '#2bb3d6', icon: '‹›', pos: 'left-[36%] bottom-[-4%]', rot: 1, delay: 1.1 },
+  { k: 'Brand', v: '50', color: '#e8a33d', icon: '★', pos: 'right-[8%] bottom-[2%]', rot: -2, delay: 1.8 },
 ];
 
 function Card({ c }: { c: Kpi }) {
@@ -25,7 +25,7 @@ function Card({ c }: { c: Kpi }) {
 }
 
 export default function LandingScreen({ onStart, hasSaved }: { onStart: () => void; hasSaved?: boolean }) {
-  const cta = hasSaved ? '새 회사 만들기' : '무료로 시작하기';
+  const cta = hasSaved ? 'New Company' : 'Start Free';
   return (
     <div className="bg-white text-neutral-950">
       <style>{`
@@ -45,20 +45,20 @@ export default function LandingScreen({ onStart, hasSaved }: { onStart: () => vo
             Startup Simulator
           </p>
           <div className="flex items-center gap-1 text-sm">
-            <button type="button" onClick={onStart} className="ml-1 min-h-10 rounded-full bg-neutral-950 px-5 font-semibold text-white hover:bg-neutral-800">시작하기</button>
+            <button type="button" onClick={onStart} className="ml-1 min-h-10 rounded-full bg-neutral-950 px-5 font-semibold text-white hover:bg-neutral-800">Get Started</button>
           </div>
         </div>
       </nav>
 
       <section className="overflow-hidden px-4 pb-10 pt-16 text-center sm:px-6 sm:pt-24">
-        <p className="mx-auto inline-block rounded-full border border-black/10 px-3 py-1 text-xs font-semibold tracking-widest text-neutral-500">창업 수업용 경영 샌드박스</p>
-        <h1 className="mx-auto mt-6 max-w-4xl text-5xl font-black leading-[1.1] tracking-[-0.04em] sm:text-7xl">
-          우리 조의 아이디어,
+        <p className="mx-auto inline-block rounded-full border border-black/10 px-3 py-1 text-xs font-semibold tracking-widest text-neutral-500">Startup Sandbox for Class</p>
+        <h1 className="font-sans mx-auto mt-6 max-w-4xl text-5xl font-black leading-[1.1] tracking-[-0.04em] sm:text-7xl">
+          Your startup idea?
           <br />
-          <span className="text-neutral-400">여기서 먼저 만들어 보세요.</span>
+          <span className="text-neutral-400">Build it here first.</span>
         </h1>
-        <p className="mt-8 text-xl font-medium text-neutral-600">망해도 공짜. 그리고 진짜 사업은 그다음에.</p>
-        <p className="mx-auto mt-3 max-w-xl text-neutral-400">사업을 설명하면 시나리오가 만들어지고, 3년 동안 결정의 결과를 직접 겪습니다. 같은 선택을 한 수많은 창업가의 실패 원인에서 배웁니다.</p>
+        <p className="mt-8 text-xl font-medium text-neutral-600">Fail fast, fail free. Then go build the real thing.</p>
+        <p className="mx-auto mt-3 max-w-xl text-neutral-400">Describe your business. AI builds your scenario. Make real decisions. Learn from thousands of founders who faced the same choices.</p>
         <div className="mt-10 flex flex-wrap justify-center gap-3">
           <button type="button" onClick={onStart} className="min-h-14 rounded-2xl bg-neutral-950 px-9 text-lg font-semibold text-white hover:bg-neutral-800">{cta} →</button>
         </div>
@@ -83,17 +83,17 @@ export default function LandingScreen({ onStart, hasSaved }: { onStart: () => vo
             <div key={c.k} className="flex justify-center"><Card c={c} /></div>
           ))}
         </div>
-        <p className="mt-6 text-xs text-neutral-400">예시 지표 · 교육용 가정값</p>
+        <p className="mt-6 text-xs text-neutral-400">Sample metrics · educational assumptions</p>
       </section>
 
       <section className="bg-neutral-950 px-4 py-24 text-center text-white sm:px-6">
-        <h2 className="text-3xl font-black tracking-[-0.03em] sm:text-5xl">아이디어를 시험할 준비 되셨나요?</h2>
-        <p className="mt-3 text-white/55">무료 · 설치 없음 · 로그인 없음</p>
+        <h2 className="font-sans text-3xl font-black tracking-[-0.03em] sm:text-5xl">Ready to test your idea?</h2>
+        <p className="mt-3 text-white/55">Free to start. No download. No login.</p>
         <button type="button" onClick={onStart} className="mt-8 min-h-14 rounded-2xl bg-white px-10 text-lg font-semibold text-black hover:bg-neutral-200">{cta} →</button>
       </section>
 
       <footer className="border-t border-black/5 px-4 py-8 text-xs text-neutral-400 sm:px-6">
-        <div className="mx-auto max-w-6xl">Startup Simulator · 교육용 가정 기반 시뮬레이션이며 실제 사업 성과를 예측하지 않습니다.</div>
+        <div className="mx-auto max-w-6xl">Startup Simulator · An educational simulation based on stated assumptions. It does not predict real business results.</div>
       </footer>
     </div>
   );
