@@ -22,6 +22,8 @@ import {
 import { SCORE_WEIGHTS, scoreGame } from './scoring';
 import { formatMoney, formatNumber } from './format';
 import { reasonLabel } from './constants';
+import { revenueStructure } from './structure';
+import { CRUNCH_RUNWAY_MONTHS, financialStatus, normalSalaryProfit, isSalaryCut } from './rules';
 
 /** 화면에 보여 주는 "가정과 계산 근거" 한 줄 */
 export interface BasisRow {
@@ -45,6 +47,7 @@ export function explainStart(game: Game): Basis {
   const t = BUSINESS_TYPES[setup.businessType];
   const rm = REVENUE_MODELS[setup.revenueModel];
   const ct = CUSTOMER_TYPES[setup.customerType];
+  const st = revenueStructure(setup.businessType, setup.customerType, setup.revenueModel);
   const k = sim.scale ?? 1;
   const runway = computeRunway(sim);
   const margin = sim.monthlyRevenue * (1 - sim.cogsRatio);
@@ -80,9 +83,14 @@ export function explainStart(game: Game): Basis {
         how: `인건비 + 운영비 + 마케팅비 + 이자(부채 × 월 ${pct(INTEREST_RATE, 1)}).`,
       },
       {
+        label: '이용자 · 공급자 · 지불자',
+        value: `${st.user} / ${st.supplier ?? '없음'} / ${st.payer}`,
+        how: `과금 기준: ${st.billing}. 이 정의는 가격 개편 같은 이벤트의 대안 문구에 그대로 쓰입니다.`,
+      },
+      {
         label: '고객 1명당 월 매출',
         value: `${sim.arpu}만원`,
-        how: `${t.label} 기본 ${t.arpu}만원 × ${rm.label} ${rm.arpuMult}배 × ${ct.label} ${ct.arpuMult}배.`,
+        how: `${t.label} 기본 ${t.arpu}만원 × ${rm.label} ${rm.arpuMult}배 × ${ct.label} ${ct.arpuMult}배. ${st.formula}. ${st.limit}`,
       },
       {
         label: '매출 대비 원가율',
@@ -110,9 +118,9 @@ export function explainStart(game: Game): Basis {
         how: `직원 ${sim.headcount}명 × 1인당 ${formatNumber(sim.capPerHead)}명(${t.label} 기본 ${formatNumber(t.capPerHead)}명 × ${ct.label} ${ct.capMult}배). 규모 보정을 하지 않으므로 소액 창업에서는 인력 부족이 늦게 나타납니다.`,
       },
       {
-        label: 'AI가 대신할 수 있는 업무',
+        label: '사내 업무 자동화 가능 비율',
         value: `최대 ${pct(sim.aiShare ?? 0.3)}`,
-        how: `${t.label} 가정값. AI를 도입하면 처리 가능 고객 수가 1 ÷ (1 − 상한 × 도입 정도)배까지 늘어나고, 이용료와 품질 위험이 따릅니다.`,
+        how: `${t.label} 가정값. 응대·문서·검수 같은 사내 운영 업무를 AI가 맡는 비율의 상한입니다. 제품 자체의 AI 기능(예: AI 추천 서비스)은 이 수치에 들어가지 않으며, 이 수치가 0%여도 'AI를 쓰지 않는 사업'이라는 뜻이 아닙니다. 도입하면 처리 가능 고객 수가 1 ÷ (1 − 상한 × 도입 정도)배까지 늘어나고, 이용료와 품질 위험이 따릅니다.`,
       },
       {
         label: '겨냥 시장 크기',
@@ -167,6 +175,11 @@ export function explainEvent(game: Game, event: Pick<ResolvedEvent, 'stage' | 'r
         how: `현금 ${formatMoney(sim.cash)} ÷ 월 적자 ${formatMoney(Math.max(0, -projectedMonthlyProfit(sim)))}.`,
       },
       {
+        label: '재무 상태 판정',
+        value: { crunch: '현금 위기', deficit: '적자', surplus: '흑자' }[financialStatus(sim)],
+        how: `현재 고객·비용 기준 월 이익이 0 이상이면 흑자, 미만이면 적자입니다. 현금이 0 이하이거나 적자인데 런웨이가 ${CRUNCH_RUNWAY_MONTHS}개월 미만이면 현금 위기입니다. 이벤트 도입문, 대안 노출, 수업용 모드의 이벤트 선정 점수가 이 판정을 함께 씁니다.${isSalaryCut(sim) ? ` 급여를 삭감한 상태라 정상 급여 기준 월 이익은 ${formatMoney(Math.round(normalSalaryProfit(sim)))}입니다.` : ''}`,
+      },
+      {
         label: '고객 확보 비용(CAC) / 생애 가치(LTV)',
         value: `${ue.cac < 1 ? '1만원 미만' : formatMoney(Math.round(ue.cac))} / ${formatMoney(Math.round(ue.ltv))}`,
         how: 'CAC = 마케팅비 ÷ 월 신규 고객, LTV = 고객당 월 이익 ÷ 이탈률. 둘 다 현재 값으로 추정한 값이며 LTV가 CAC의 3배 이상이면 마케팅을 늘려도 이익이 남는다고 봅니다.',
@@ -177,9 +190,9 @@ export function explainEvent(game: Game, event: Pick<ResolvedEvent, 'stage' | 'r
         how: '성장률은 최근 최대 7개월 월 매출의 마지막 ÷ 처음 − 1. 이탈률은 기본 이탈률을 품질·인력 부족으로 보정한 값입니다. 투자 이벤트에서 이 두 값이 조건이 됩니다.',
       },
       {
-        label: '인력 가동률 / AI 자동화',
+        label: '인력 가동률 / 사내 업무 자동화',
         value: `${pct(util)} / ${pct(aiAutomated(sim))}`,
-        how: `가동률 = 고객 수 ÷ 처리 가능 고객 수. 100%를 넘으면 신규 유입이 줄고 이탈·사기 저하가 생깁니다. AI가 맡은 업무 ${pct(aiAutomated(sim))}는 업종 상한 ${pct(sim.aiShare ?? 0.3)} 안에서만 늘어납니다.`,
+        how: `가동률 = 고객 수 ÷ 처리 가능 고객 수. 100%를 넘으면 신규 유입이 줄고 이탈·사기 저하가 생깁니다. 사내 업무 자동화 ${pct(aiAutomated(sim))}는 업종 상한 ${pct(sim.aiShare ?? 0.3)} 안에서만 늘어납니다.`,
       },
       {
         label: '시장 점유',

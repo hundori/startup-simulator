@@ -6,6 +6,7 @@ export const EMERGENCY_EVENT_ID = 'x01-emergency';
 // 어떤 결과든 "긴급 카드는 한 번만" 표시를 남긴다.
 const E = (e: Effects): Effects => ({ ...e, flags: [...(e.flags ?? []), 'emergency-used'] });
 const out = (o: Outcome): Outcome => ({ ...o, effects: E(o.effects) });
+const plain = (o: Outcome): Outcome => o;
 
 /**
  * 긴급 생존 카드. 런웨이가 1개월 미만이 되면 다음 이벤트 앞에 한 번 열린다.
@@ -126,6 +127,110 @@ export const EMERGENCY_EVENT: GameEvent = {
         out({
           effects: { morale: -4 },
           text: '아무것도 바꾸지 않았습니다. 현금은 계속 줄고, 팀은 불안을 느끼기 시작했습니다. 이 선택은 다음 결정을 더 어렵게 만듭니다.',
+          verdict: 'weak',
+        }),
+      ],
+    },
+  ],
+};
+
+export const SALARY_EVENT_ID = 'x02-salary-restore';
+
+/**
+ * 급여 복원 후속 결정. 급여 삭감(무급여 전환 등)이 6개월 이상 이어지면 다음 이벤트 앞에 최대 두 번 열린다.
+ * 긴급 카드와 마찬가지로 연차 이벤트 수(수업용 9개/전체 19개)와 개월 배분에는 포함되지 않고, 시간을 흘리지 않고 즉시 적용된다.
+ * 개인 생활비는 회사 현금에서 빼지 않는다. 팀이 떠안은 개인 부담은 salaryCut.burden에 따로 기록한다.
+ */
+export const SALARY_EVENT: GameEvent = {
+  id: SALARY_EVENT_ID,
+  stage: 1,
+  order: 98,
+  isFallback: true,
+  title: '급여 복원: 삭감이 길어지고 있습니다',
+  reason: 'wrong-team',
+  weight: 0,
+  situation:
+    '{company}의 팀은 {months}개월째 급여를 삭감한 채 일하고 있습니다. 그동안 회사 손익은 버텼지만, 팀원들이 개인적으로 떠안은 부담은 약 {burden}입니다. 지금의 이익에는 이 부담이 빠져 있어 실제보다 좋게 보입니다. 정상 급여를 지급했다면 월 이익은 {normalProfit}입니다.',
+  discussionPrompts: [
+    '삭감한 급여를 언제, 어떤 조건에서 되돌리겠다고 팀과 약속했는가?',
+    '지금 보이는 흑자(또는 적자)는 정상 급여를 지급해도 유지되는가?',
+    '팀원이 떠나면 회사가 잃는 것과, 급여를 복원하면 회사가 잃는 것을 비교하면?',
+  ],
+  options: [
+    {
+      id: 'restore-full',
+      label: '정상 급여로 전액 복원',
+      description: '삭감 전 급여로 되돌린다. 월 고정비가 그만큼 늘어난다.',
+      outcomes: [
+        plain({
+          effects: { salaryRestorePct: 1, morale: 8, quality: 1 },
+          text: '약속한 대로 급여를 복원하자 팀의 신뢰가 회복되고 사기가 올랐습니다. 월 고정비는 늘었고, 이제 회사 손익이 정상 급여 기준의 진짜 수익성입니다.',
+          verdict: 'ok',
+        }),
+      ],
+    },
+    {
+      id: 'restore-half',
+      label: '절반만 단계적으로 복원',
+      description: '삭감분의 절반을 돌려주고 나머지는 지표가 개선되면 복원한다고 약속한다.',
+      outcomes: [
+        plain({
+          when: [gte('morale', 45)],
+          effects: { salaryRestorePct: 0.5, morale: 3 },
+          text: '단계적 복원 일정이 합리적이라고 받아들여졌습니다. 부담을 나누면서도 최소한의 신뢰를 지켰습니다.',
+          verdict: 'ok',
+        }),
+        plain({
+          effects: { salaryRestorePct: 0.5, morale: -2, headcount: -1 },
+          text: '이미 사기가 낮은 상태여서 절반 복원으로는 부족했고, 핵심 인력 한 명이 떠났습니다.',
+          verdict: 'weak',
+        }),
+      ],
+    },
+    {
+      id: 'equity-bonus',
+      label: '급여는 유지하고 스톡옵션·성과급을 약속',
+      description: '현금 대신 지분과 성과급으로 보상한다. 회사 현금은 아끼지만 지분이 희석된다.',
+      outcomes: [
+        plain({
+          when: [gte('reputation', 40), gte('morale', 45)],
+          effects: { dilution: 3, morale: 4 },
+          text: '회사의 가능성을 믿는 팀원들이 스톡옵션을 받아들였습니다. 현금은 지켰지만 약속한 성과가 나오지 않으면 불만이 더 커집니다.',
+          verdict: 'ok',
+        }),
+        plain({
+          effects: { dilution: 3, morale: -3 },
+          text: '불확실한 지분 약속만으로는 생활비 압박을 달래지 못했습니다. 지분만 희석되고 팀의 불만은 남았습니다.',
+          verdict: 'weak',
+        }),
+      ],
+    },
+    {
+      id: 'reduce-hours',
+      label: '근무 시간 축소(주 4일)와 겸업 허용',
+      description: '급여는 그대로 두되 근무를 줄여 팀이 다른 수입을 구할 수 있게 한다. 처리 능력과 품질이 떨어진다.',
+      outcomes: [
+        plain({
+          effects: { capPerHeadPct: -0.2, morale: 4, quality: -2 },
+          text: '팀의 생활 부담은 줄었지만 일 처리 속도와 품질이 떨어졌습니다. 회사의 현금 지출은 그대로입니다.',
+          verdict: 'ok',
+        }),
+      ],
+    },
+    {
+      id: 'keep-cut',
+      label: '삭감 유지',
+      description: '당분간 지금처럼 간다. 회사 현금은 지키지만 팀의 부담과 이탈 위험이 계속 커진다.',
+      outcomes: [
+        plain({
+          when: [gte('morale', 60)],
+          effects: { morale: -8 },
+          text: '팀이 한 번 더 참아 주었지만 사기가 크게 떨어졌습니다. 다음에도 같은 선택을 하면 이탈이 현실이 됩니다.',
+          verdict: 'weak',
+        }),
+        plain({
+          effects: { morale: -14, headcount: -1, quality: -3 },
+          text: '더는 버티기 어렵다는 팀원이 회사를 떠났습니다. 남은 팀의 업무가 늘고 품질이 떨어졌습니다.',
           verdict: 'weak',
         }),
       ],

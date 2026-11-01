@@ -252,6 +252,7 @@ export function createInitialState(setup: SetupInput): SimState {
     aiLevel: 0,
     tam: Math.max(30, Math.round(t.tam * k)),
     revHist: [Math.round(customers * arpu)],
+    cashHist: [setup.capital],
     debt: 0,
     dilution: 0,
     insolvencyMonths: 0,

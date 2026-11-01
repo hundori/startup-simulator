@@ -10,7 +10,9 @@ import {
   monthlyFixedCost,
   monthlyInterest,
   payroll,
+  monthsUntilNextDecision,
   previewRunway,
+  projectedMonthlyProfit,
   unitEconomics,
   utilization,
 } from '@/engine';
@@ -47,6 +49,10 @@ function RunwayPreview({ game, cost, fixedDelta }: { game: Game; cost: number; f
   const now = computeRunway(game.sim);
   const after = previewRunway(game.sim, cost, fixedDelta);
   const fixedNow = monthlyFixedCost(game.sim);
+  const months = monthsUntilNextDecision(game);
+  const monthlyProfitAfter = projectedMonthlyProfit(game.sim) - fixedDelta;
+  const cashAtNext = after.cashAfter + monthlyProfitAfter * months;
+  const depletion = months > 0 && cashAtNext < 0;
   const danger = after.months !== null && after.months < 3;
   const caution = after.months !== null && after.months >= 3 && after.months < 6;
   return (
@@ -88,7 +94,22 @@ function RunwayPreview({ game, cost, fixedDelta }: { game: Game; cost: number; f
           <Badge tone="warn">주의 · 런웨이 6개월 미만</Badge>
         </div>
       ) : null}
-      <p className="mt-2 text-xs text-muted">일회성 비용과 월 고정비 변동만 반영한 추정입니다(결과가 갈리면 가장 불리한 쪽). 매출·고객 변화는 결정 후 공개됩니다.</p>
+      {months > 0 ? (
+        <div className="mt-2 border-t border-line/60 pt-2 text-xs">
+          <p className="num flex justify-between gap-2">
+            <span className="text-muted">다음 결정({months}개월 뒤) 예상 현금</span>
+            <span className={`font-semibold ${depletion ? 'text-loss' : ''}`}>{formatMoney(Math.round(cashAtNext))}</span>
+          </p>
+          {depletion ? (
+            <div className="mt-1">
+              <Badge tone="danger">자금 고갈 경고 · 다음 결정 전에 현금이 바닥날 수 있음</Badge>
+            </div>
+          ) : null}
+        </div>
+      ) : null}
+      <p className="mt-2 text-xs leading-relaxed text-muted">
+        포함: 일회성 비용, 확정된 월 고정비 변동(결과가 갈리면 가장 불리한 쪽), 지금의 고객·매출이 유지된다는 가정. 제외: 신규 고객·이탈, 투자·지원금 같은 유입, 결과에 따라 달라지는 효과(결정 후 공개).
+      </p>
     </div>
   );
 }
@@ -286,7 +307,7 @@ export default function StatusPanel({ game, previewCost = null }: { game: Game; 
           </p>
           {ue.ratio !== null && ue.ratio < 3 ? <p className="text-xs text-warn">생애 가치가 확보 비용의 3배 미만이면 마케팅을 늘릴수록 손해일 수 있습니다.</p> : null}
           <p className="num">
-            AI가 맡은 업무 {Math.round(aiAutomated(sim) * 100)}% (업종 상한 {Math.round((sim.aiShare ?? 0.3) * 100)}%)
+            사내 업무 자동화 {Math.round(aiAutomated(sim) * 100)}% (상한 {Math.round((sim.aiShare ?? 0.3) * 100)}%)
           </p>
           <div className="flex flex-wrap gap-1.5 pt-1">
             {util > 1 ? <Badge tone="warn">인력 부족</Badge> : null}

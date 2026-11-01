@@ -7,13 +7,28 @@ import { BUSINESS_TYPES, CUSTOMER_TYPES, REVENUE_MODELS } from './templates';
 import { scoreGame } from './scoring';
 import { withJosa } from './josa';
 import { createInitialState } from './templates';
-import { monthlyFixedCost, projectedMonthlyProfit, unitEconomics, aiAutomated } from './rules';
-import { EMERGENCY_EVENT_ID } from './events';
+import { isSalaryCut, monthlyFixedCost, normalSalaryProfit, projectedMonthlyProfit, salaryGapPerMonth, unitEconomics, aiAutomated } from './rules';
+import { EMERGENCY_EVENT_ID, SALARY_EVENT_ID } from './events';
 
 export interface TurningPoint {
   kind: 'best' | 'worst';
   decision: DecisionRecord;
   impact: number;
+  /** 상황 적합성(결정 당시 회사 상태에 맞는 선택이었는가) */
+  fit: Verdict;
+  /** 재무 결과(결정 직후부터 다음 결정까지 현금 증감, 만원). 기록이 없으면 null */
+  cashChange: number | null;
+  /** 두 판단이 다를 때나 주의할 점을 설명하는 문장 */
+  note: string;
+}
+
+/** 무급여·급여 삭감이 있었을 때의 이익 구분 */
+export interface SalaryReport {
+  months: number; // 삭감 상태로 보낸 개월 수
+  burden: number; // 팀이 개인적으로 떠안은 누적 금액(회사 현금에서 차감하지 않음)
+  active: boolean; // 종료 시점에도 삭감 상태인가
+  currentProfit: number; // 현재 급여 기준 월 이익
+  normalProfit: number; // 정상 급여를 지급한다고 가정한 월 이익
 }
 
 export interface ReasonStat {
@@ -38,6 +53,9 @@ export interface Report {
   headline: string;
   summary: string[];
   turningPoints: TurningPoint[];
+  turningCriteria: string[]; // 전환점 선정 기준(설명)
+  salary: SalaryReport | null;
+  learning: { verdicts: Record<Verdict, number>; note: string }; // 학습·의사결정 기록(회사 성과 점수와 별개)
   reasons: ReasonStat[];
   discussion: { total: number; avgLength: number; withDissent: number; shortLabel: string };
   choiceInsights: Insight[]; // 팀이 실제로 고른 대안을 직접 짚은 것
@@ -197,6 +215,20 @@ function buildChoiceInsights(game: Game): Insight[] {
 
 const VERDICT_WORD: Record<Verdict, string> = { strong: '좋음', ok: '보통', weak: '아쉬움' };
 
+/** 인원·채용·외주·AI 도입을 실제 결정 이력에서 읽는다. 이력으로 뒷받침되는 사실만 문장으로 만든다. */
+function staffingFacts(game: Game) {
+  const { decisions, sim, history } = game;
+  const start = history[0].headcount;
+  const end = sim.headcount;
+  const chose = (ids: string[]) => decisions.filter((d) => ids.includes(d.optionId));
+  const hired = chose(['hire-two', 'hire-and-automate', 'first-hire']);
+  const outsourced = chose(['freelance', 'outsource', 'outsourced']);
+  const aiDecisions = chose(['hire-and-automate', 'ai-first']);
+  const reduced = chose(['cut-costs', 'stop-loss', 'unpaid-founders']);
+  const left = decisions.filter((d) => /떠났|이탈|퇴사/.test(d.outcomeText) && d.afterPeriod.headcount < d.before.headcount);
+  return { start, end, hired, outsourced, aiDecisions, reduced, left, aiLevel: sim.aiLevel ?? 0 };
+}
+
 function buildInsights(game: Game): Insight[] {
   const { setup, sim, history, decisions } = game;
   const list: Insight[] = [];
@@ -208,20 +240,27 @@ function buildInsights(game: Game): Insight[] {
   const fixedChange = endFixed - startFixed;
   list.push({
     title: '고정비가 어떻게 변했나',
-    text: `월 고정비는 ${m(startFixed)}에서 ${m(endFixed)}으로 ${fixedChange >= 0 ? '늘었습니다' : '줄었습니다'}(${fixedChange >= 0 ? '+' : '−'}${m(Math.abs(fixedChange))}). 한 번 늘린 채용·운영비·마케팅비는 줄이기 어렵습니다. 결정할 때 일회성 비용과 월 고정비 변동을 따로 계산했는지 돌아보세요.`,
+    text: `월 고정비는 ${m(startFixed)}에서 ${m(endFixed)}으로 ${fixedChange >= 0 ? '늘었습니다' : '줄었습니다'}(${fixedChange >= 0 ? '+' : '−'}${m(Math.abs(fixedChange))}). ${
+      fixedChange > 0
+        ? '한 번 늘린 채용·운영비·마케팅비는 줄이기 어렵습니다. 결정할 때 일회성 비용과 월 고정비 변동을 따로 계산했는지 돌아보세요.'
+        : '고정비가 늘지 않은 대신 어떤 기회를 포기했는지도 함께 돌아보세요.'
+    }${isSalaryCut(sim) ? ' 단, 종료 시점에도 급여 삭감 상태라 정상 급여 기준 고정비는 이보다 큽니다.' : ''}`,
   });
 
-  // 2) 현금이 가장 얕았던 순간
+  // 2) 현금이 가장 얕았던 순간 — 마이너스와 고갈 이전을 구분한다
   let low = history[0];
   for (const h of history) if (h.cash < low.cash) low = h;
   const negMonths = history.filter((h) => h.month > 0 && h.cash < 0).length;
   const usedEmergency = decisions.some((d) => d.eventId === EMERGENCY_EVENT_ID);
+  const lowLabel = monthToLabel(low.month).replace(/ 시점$/, '');
   list.push({
     title: '현금이 가장 얕았던 순간',
-    text: `현금이 가장 적었던 때는 ${monthToLabel(low.month).replace(/ 시점$/, '')}로 ${m(low.cash)}이었습니다${negMonths > 0 ? `. 현금이 마이너스였던 달이 ${negMonths}개월 있었습니다` : ''}. ${
+    text: `현금이 가장 적었던 때는 ${lowLabel}로 ${low.cash < 0 ? `마이너스 ${m(-low.cash)}` : m(low.cash)}이었습니다${negMonths > 0 ? `. 현금이 마이너스였던 달이 ${negMonths}개월 있었습니다` : ''}. ${
       usedEmergency
         ? '런웨이가 1개월 아래로 내려가 긴급 생존 카드를 사용했습니다. 그 전 어느 결정에서 위험 신호를 볼 수 있었는지 짚어 보세요.'
-        : '긴급 생존 카드를 쓸 만큼 몰리지는 않았습니다. 그 여유가 어느 결정에서 만들어졌는지 확인해 보세요.'
+        : low.cash < 0
+          ? '긴급 생존 카드가 열릴 만큼의 기준(런웨이 1개월 미만)은 지나갔는데도 사용 기록이 없다면, 현금이 마이너스가 된 시점의 결정을 다시 보세요.'
+          : '현금이 마이너스까지 내려가지는 않았습니다. 그 여유가 어느 결정에서 만들어졌는지 확인해 보세요.'
     }`,
   });
 
@@ -236,29 +275,57 @@ function buildInsights(game: Game): Insight[] {
     });
   }
 
-  // 4) 성장과 수익
+  // 4) 성장과 수익 — 급여 삭감이 있었다면 정상 급여 기준을 함께 보여 준다
   const end = history[history.length - 1];
   const start = history[0];
   const profit = projectedMonthlyProfit(sim);
+  const normal = normalSalaryProfit(sim);
+  const gap = salaryGapPerMonth(sim);
   list.push({
     title: '성장과 수익의 균형',
     text: `월 매출은 ${m(start.revenue)}에서 ${m(end.revenue)}으로 ${end.revenue >= start.revenue ? '늘었지만' : '줄었고'}, 마지막 시점 월 이익은 ${profit >= 0 ? '+' : '−'}${m(Math.abs(profit))}입니다. ${
-      profit >= 0 ? '매출이 고정비를 넘어서 시간이 회사 편이 된 상태입니다.' : '매출이 아직 비용을 따라가지 못해, 이 상태가 길어지면 런웨이가 다시 줄어듭니다.'
+      gap > 0
+        ? `다만 급여 삭감 상태라 정상 급여를 지급했다면 월 이익은 ${normal >= 0 ? '+' : '−'}${m(Math.abs(normal))}입니다. ${normal >= 0 ? '정상 급여로 되돌려도 흑자가 유지됩니다.' : '정상 급여로 되돌리면 적자가 됩니다. 현재의 이익은 팀의 개인 부담으로 만들어진 것입니다.'}`
+        : profit >= 0
+          ? '매출이 고정비를 넘어서 시간이 회사 편이 된 상태입니다.'
+          : '매출이 아직 비용을 따라가지 못해, 이 상태가 길어지면 런웨이가 다시 줄어듭니다.'
     }`,
   });
 
-  // 5) AI 활용
-  const ai = aiAutomated(sim);
+  // 5) 인력 구성과 자동화 — 실제 결정 이력으로만 서술한다
+  const f = staffingFacts(game);
+  const bits: string[] = [];
+  bits.push(`인원은 ${f.start}명에서 ${f.end}명으로 ${f.end > f.start ? '늘었습니다' : f.end < f.start ? '줄었습니다' : '그대로였습니다'}`);
+  bits.push(f.hired.length > 0 ? `정규 채용 결정은 ${f.hired.length}번(${f.hired.map((d) => `'${d.optionLabel}'`).join(', ')})이었습니다` : '정규 채용을 선택한 결정은 없었습니다');
+  if (f.outsourced.length > 0) bits.push(`프리랜서·외주를 ${f.outsourced.length}번 활용했습니다`);
+  if (f.end < f.start) {
+    const why = [...f.reduced, ...f.left].map((d) => `'${d.optionLabel}'`);
+    bits.push(why.length > 0 ? `인원 감소는 ${Array.from(new Set(why)).join(', ')}와 관련된 결정 이후에 일어났습니다` : '인원 감소는 기록된 결정 외에 운영 중 이탈로 일어났습니다');
+  }
+  const aiNow = Math.round(aiAutomated(sim) * 100);
+  bits.push(
+    f.aiLevel > 0 || f.aiDecisions.length > 0
+      ? `사내 업무 자동화는 ${aiNow}%(상한 ${Math.round((sim.aiShare ?? 0.3) * 100)}%)까지 도입했습니다`
+      : '사내 업무 자동화는 도입하지 않았습니다(제품 자체의 AI 기능은 이 수치와 별개입니다)',
+  );
   list.push({
-    title: 'AI와 사람의 역할',
-    text: `AI가 맡은 업무는 ${Math.round(ai * 100)}%(업종 상한 ${Math.round((sim.aiShare ?? 0.3) * 100)}%)였습니다. ${
-      ai >= 0.3
-        ? 'AI로 같은 인원이 더 많은 고객을 받을 수 있었지만, 품질과 평판을 함께 점검했는지가 중요합니다.'
-        : 'AI를 거의 쓰지 않아 인력 확대에 의존했습니다. 고정비가 늘어나는 채용 대신 AI로 해결할 수 있었던 일이 있었는지 토론해 보세요.'
-    }`,
+    title: '인력 구성과 자동화',
+    text: `${bits.join('. ')}. 이 기록을 바탕으로 사람·외주·자동화 중 어떤 방식으로 병목을 풀었는지, 고정비 부담과 비교해 어땠는지 토론해 보세요.`,
   });
 
-  // 6) 가장 약했던 영역
+  // 6) 무급여·급여 삭감
+  if (sim.salaryCut) {
+    const c = sim.salaryCut;
+    const asked = decisions.filter((d) => d.eventId === SALARY_EVENT_ID);
+    list.push({
+      title: '무급여·급여 삭감의 비용',
+      text: `급여 삭감 상태로 ${c.months}개월을 보냈고, 팀이 개인적으로 떠안은 부담은 누적 약 ${m(c.burden)}입니다(회사 현금에서는 차감하지 않았습니다). ${
+        asked.length > 0 ? `급여 복원 결정은 ${asked.length}번 내렸고 마지막 선택은 '${asked[asked.length - 1].optionLabel}'이었습니다.` : '급여 복원 결정을 내릴 시점까지는 이어지지 않았습니다.'
+      } ${isSalaryCut(sim) ? '종료 시점에도 정상 급여로 돌아오지 못했습니다.' : '종료 시점에는 정상 급여 수준으로 돌아왔습니다.'}`,
+    });
+  }
+
+  // 7) 가장 약했던 영역
   const weakest = (Object.entries(scoreGame(game).parts) as [string, number][]).sort((a, b) => a[1] - b[1])[0];
   const label: Record<string, string> = { finance: '재무', growth: '성장', quality: '제품 품질', team: '팀', reputation: '평판' };
   list.push({
@@ -292,13 +359,44 @@ export function generateReport(game: Game): Report {
     .map((d) => ({ d, impact: decisionImpact(d) }))
     .sort((a, b) => b.impact - a.impact);
   const turningPoints: TurningPoint[] = [];
-  if (ranked.length > 0) {
-    turningPoints.push({ kind: 'best', decision: ranked[0].d, impact: ranked[0].impact });
-    if (ranked.length > 1) {
-      const worst = ranked[ranked.length - 1];
-      turningPoints.push({ kind: 'worst', decision: worst.d, impact: worst.impact });
+  const mk = (kind: 'best' | 'worst', d: DecisionRecord, impact: number): TurningPoint => {
+    const cash = d.cashFlow ? d.cashFlow.total : null;
+    let note = '';
+    if (kind === 'worst' && d.verdict !== 'weak') {
+      note = `결정 당시 상황에는 맞는 선택이었다는 판정(${VERDICT_WORD[d.verdict]})이지만, 결정 이후 품질·사기·평판·고객·매출 변화의 합은 낮았습니다. 맞는 선택이어도 비용이나 시간 때문에 결과가 좋지 않을 수 있습니다.`;
+    } else if (kind === 'best' && cash !== null && cash < 0) {
+      note = `상황에 맞는 좋은 선택이었지만 현금은 ${formatMoney(-cash)} 줄었습니다. 좋은 대응이라도 비용 때문에 현금 위기를 앞당길 수 있다는 점을 함께 보세요.`;
+    } else if (kind === 'worst') {
+      note = '결정 당시 상황에 비춰서도 아쉬웠다는 판정이며, 결정 이후 지표 변화도 낮았습니다.';
     }
-  }
+    return { kind, decision: d, impact, fit: d.verdict, cashChange: cash, note };
+  };
+  const bestC = ranked.find((x) => x.impact > 0 && x.d.verdict !== 'weak');
+  if (bestC) turningPoints.push(mk('best', bestC.d, bestC.impact));
+  const worstC = [...ranked].reverse().find((x) => (x.d.verdict === 'weak' || x.impact < -0.05) && x.d.eventId !== bestC?.d.eventId);
+  if (worstC) turningPoints.push(mk('worst', worstC.d, worstC.impact));
+  const turningCriteria = [
+    '가장 좋았던 결정: 판정이 "아쉬움"이 아니면서, 결정 이후 품질·사기·평판 변화(0~100 기준)와 고객 수·월 매출 변화율의 합이 가장 높은 결정입니다. 후보가 없으면 표시하지 않습니다.',
+    '가장 아쉬웠던 결정: 판정이 "아쉬움"이거나 위 합이 음수인 결정 중 가장 낮은 것입니다. 타당한 후보가 없으면 억지로 고르지 않습니다.',
+    '판정(좋음·보통·아쉬움)은 결정 당시 회사 상태에 비춰 적합했는지를, 위 합과 현금 증감은 결정 뒤의 재무·지표 결과를 뜻합니다. 두 기준은 서로 다를 수 있습니다.',
+  ];
+  if (!worstC) turningCriteria.push('이번 게임에서는 뚜렷하게 아쉬웠던 결정이 없어 표시하지 않았습니다.');
+
+  const salary: SalaryReport | null = game.sim.salaryCut
+    ? {
+        months: game.sim.salaryCut.months,
+        burden: game.sim.salaryCut.burden,
+        active: isSalaryCut(game.sim),
+        currentProfit: projectedMonthlyProfit(game.sim),
+        normalProfit: normalSalaryProfit(game.sim),
+      }
+    : null;
+  const verdicts = { strong: 0, ok: 0, weak: 0 } as Record<Verdict, number>;
+  for (const d of decisions) verdicts[d.verdict] += 1;
+  const learning = {
+    verdicts,
+    note: '학습·의사결정 기록은 회사 성과 점수에 합산되지 않습니다. 판정은 결정 당시 상황에 적합했는지를 규칙으로 계산한 것이고, 근거 입력은 글자 수(20자 이상)만 확인할 뿐 내용의 타당성은 평가하지 않습니다.',
+  };
 
   const byReason = new Map<CbReasonId, ReasonStat>();
   for (const d of decisions) {
@@ -353,7 +451,7 @@ export function generateReport(game: Game): Report {
 
   const insights = buildInsights(game);
   const choiceInsights = buildChoiceInsights(game);
-  return { score, headline, summary, turningPoints, reasons, discussion, choiceInsights, insights, principles: PRINCIPLES, questions, endNotes };
+  return { score, headline, summary, turningPoints, turningCriteria, salary, learning, reasons, discussion, choiceInsights, insights, principles: PRINCIPLES, questions, endNotes };
 }
 
 export function reportToMarkdown(game: Game, report: Report): string {
@@ -368,15 +466,37 @@ export function reportToMarkdown(game: Game, report: Report): string {
     `종합 ${report.score.total}점 (${report.score.grade}) — 재무 ${report.score.parts.finance}, 성장 ${report.score.parts.growth}, 품질 ${report.score.parts.quality}, 팀 ${report.score.parts.team}, 평판 ${report.score.parts.reputation}`,
     '',
   );
+  lines.push(
+    `> 성장 점수 산식 변경: 이전 산식(월 매출 ÷ 초기 자본의 15%)이면 성장 ${report.score.legacy.growth}점, 종합 ${report.score.legacy.total}점. 현재는 매출의 비용 충당률과 매출 규모로 계산합니다. 이 점수는 회사 성과이며 학습·의사결정 평가와 별개입니다.`,
+    '',
+  );
   if (report.turningPoints.length) {
     lines.push('## 주요 전환점', '');
     for (const t of report.turningPoints) {
       lines.push(
         `- ${t.kind === 'best' ? '가장 좋았던 결정' : '가장 아쉬웠던 결정'}: ${t.decision.eventTitle} → ${t.decision.optionLabel}`,
+        `  - 상황 적합성: ${VERDICT_WORD[t.fit]}${t.cashChange !== null ? ` / 현금 증감: ${formatMoney(t.cashChange)}` : ''}`,
       );
+      if (t.note) lines.push(`  - ${t.note}`);
     }
-    lines.push('');
+    lines.push('', ...report.turningCriteria.map((c) => `  - 기준: ${c}`), '');
   }
+  if (report.salary) {
+    lines.push(
+      '## 무급여·급여 삭감 이력',
+      '',
+      `- 삭감 상태 ${report.salary.months}개월 (${report.salary.active ? '종료 시점에도 삭감 중' : '종료 전 복원'}), 팀 개인 부담 ${formatMoney(report.salary.burden)} (회사 현금 미차감)`,
+      `- 현재 급여 기준 월 이익 ${formatMoney(report.salary.currentProfit)} / 정상 급여 가정 월 이익 ${formatMoney(report.salary.normalProfit)}`,
+      '',
+    );
+  }
+  lines.push(
+    '## 학습·의사결정 기록 (회사 성과 점수와 별개)',
+    '',
+    `- 좋음 ${report.learning.verdicts.strong} · 보통 ${report.learning.verdicts.ok} · 아쉬움 ${report.learning.verdicts.weak}`,
+    `- ${report.learning.note}`,
+    '',
+  );
   if (report.choiceInsights.length) {
     lines.push('## 우리가 실제로 고른 선택으로 본 인사이트', '');
     for (const i of report.choiceInsights) lines.push(`- [${i.eyebrow}] ${i.title} — ${i.text}`);
@@ -393,15 +513,28 @@ export function reportToMarkdown(game: Game, report: Report): string {
   }
   lines.push('', '## 의사결정 기록', '');
   game.decisions.forEach((d, i) => {
-    lines.push(
-      `### ${i + 1}. ${d.eventTitle}`,
+    const snap = (s: DecisionRecord['before']) => `현금 ${formatMoney(s.cash)}, 월 매출 ${formatMoney(s.monthlyRevenue)}, 고객 ${s.customers}, 품질 ${s.quality}, 사기 ${s.morale}, 평판 ${s.reputation}, 인원 ${s.headcount}`;
+    const cf = d.cashFlow;
+    const block = [
+      `### ${i + 1}. ${d.eventTitle} (${monthToLabel(d.month)})`,
       '',
-      `- 선택: ${d.optionLabel}`,
-      `- 토론 근거: ${d.rationale}`,
+      d.situation ? `- 질문: ${d.situation}` : '',
+      `- 결정 직전 재무 상태: ${d.finStatusBefore === 'surplus' ? '흑자' : d.finStatusBefore === 'deficit' ? '적자' : d.finStatusBefore === 'crunch' ? '현금 위기' : '(기록 없음)'}`,
+      '- 제시된 선택지:',
+      ...(d.optionsShown ?? []).map(
+        (o) => `  - ${o.label}: 일회성 비용 ${formatMoney(o.cost)}, 월 고정비 변화 ${o.fixedMin}~${o.fixedMax}만원${o.available ? '' : ` [선택 제한: ${o.reasons.join(' / ')}]`}`,
+      ),
+      `- 선택: ${d.optionLabel} (판정: ${VERDICT_WORD[d.verdict]})`,
+      `- 토론 근거(글자 수만 검사, 내용 타당성은 평가하지 않음): ${d.rationale}`,
       d.dissent ? `- 반대 의견·검토한 대안: ${d.dissent}` : '- 반대 의견: (기록 없음)',
       `- 결과: ${d.outcomeText}`,
+      `- 지표 변화: 결정 전 [${snap(d.before)}] → 기간 종료 [${snap(d.afterPeriod)}] (${d.monthsElapsed}개월)`,
+      cf
+        ? `- 현금 변화 분해: 일회성 ${formatMoney(cf.oneTime)} + 자금 유입 ${formatMoney(cf.inflow)} + 영업 현금흐름 ${formatMoney(cf.operating)} + 기타 ${formatMoney(cf.other)} = ${formatMoney(cf.total)}`
+        : '',
       '',
-    );
+    ];
+    lines.push(...block.filter((l, k) => l !== '' || k === block.length - 1 || k === 1));
   });
   lines.push('## 다음 토론 질문', '', ...report.questions.map((q) => `- ${q}`), '');
   lines.push('---', '', ...report.endNotes.map((n) => `*${n}*`));

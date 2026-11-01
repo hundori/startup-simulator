@@ -2,11 +2,11 @@ import type { GameEvent, Stage } from '../types';
 import { STAGE1_EVENTS } from './stage1';
 import { STAGE2_EVENTS } from './stage2';
 import { STAGE3_EVENTS } from './stage3';
-import { EMERGENCY_EVENT } from './emergency';
+import { EMERGENCY_EVENT, SALARY_EVENT } from './emergency';
 
-export { EMERGENCY_EVENT_ID } from './emergency';
+export { EMERGENCY_EVENT_ID, SALARY_EVENT_ID } from './emergency';
 
-export const ALL_EVENTS: GameEvent[] = [...STAGE1_EVENTS, ...STAGE2_EVENTS, ...STAGE3_EVENTS, EMERGENCY_EVENT];
+export const ALL_EVENTS: GameEvent[] = [...STAGE1_EVENTS, ...STAGE2_EVENTS, ...STAGE3_EVENTS, EMERGENCY_EVENT, SALARY_EVENT];
 
 export const EVENT_MAP: Record<string, GameEvent> = Object.fromEntries(
   ALL_EVENTS.map((e) => [e.id, e]),

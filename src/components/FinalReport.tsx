@@ -2,7 +2,7 @@
 
 import type { Game } from '@/engine';
 import AdvisorPicker from './AdvisorPicker';
-import { DISCLAIMER_LONG, explainReport, generateReport, monthToLabel, reportToMarkdown } from '@/engine';
+import { DISCLAIMER_LONG, explainReport, formatMoney, generateReport, monthToLabel, reportToMarkdown } from '@/engine';
 import Assumptions from './Assumptions';
 import TrendCharts from './TrendCharts';
 import { Badge, Button, Callout, VERDICT_LABEL } from './ui';
@@ -48,8 +48,11 @@ export default function FinalReport({ game, onRestart }: { game: Game; onRestart
         <h2 id="score-h" className="mb-2 text-lg font-semibold">점수</h2>
         <div className="flex items-end gap-4">
           <p className="num text-5xl font-bold leading-none">{report.score.total}</p>
-          <p className="pb-1 text-muted">/ 100 · 등급 <strong className="text-ink">{report.score.grade}</strong></p>
+          <p className="pb-1 text-muted">/ 100 · 등급 <strong className="text-ink">{report.score.grade}</strong> · 회사 성과 점수</p>
         </div>
+        <p className="mt-2 text-xs text-muted">
+          성장 점수는 월 매출이 월 고정비를 얼마나 덮는지와 매출 규모(로그)로 계산합니다. 이전 산식(월 매출 ÷ 초기 자본의 15%)이었다면 성장 {report.score.legacy.growth}점, 종합 {report.score.legacy.total}점입니다. 초기 자본이 작을수록 이전 산식은 점수가 부풀려지는 편향이 있어 바꿨습니다.
+        </p>
         <dl className="mt-4 grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-5">
           {(Object.keys(PART_LABEL) as (keyof typeof PART_LABEL)[]).map((k) => (
             <div key={k}>
@@ -91,11 +94,45 @@ export default function FinalReport({ game, onRestart }: { game: Game; onRestart
                 <p className="text-sm">선택: {t.decision.optionLabel}</p>
                 <p className="mt-1 text-sm text-muted">{t.decision.outcomeText}</p>
                 <p className="mt-1 whitespace-pre-wrap text-sm text-muted">우리의 근거: {t.decision.rationale}</p>
+                <p className="num mt-1 text-xs text-muted">
+                  상황 적합성: {VERDICT_LABEL[t.fit]}
+                  {t.cashChange !== null ? ` · 재무 결과(현금 증감): ${t.cashChange >= 0 ? '+' : ''}${formatMoney(t.cashChange)}` : ''}
+                </p>
+                {t.note ? <p className="mt-1 text-sm">{t.note}</p> : null}
               </li>
             ))}
           </ul>
+          <details className="mt-2 text-sm text-muted">
+            <summary className="cursor-pointer">선정 기준 보기</summary>
+            <ul className="mt-1 list-disc space-y-1 pl-5">
+              {report.turningCriteria.map((c) => (
+                <li key={c}>{c}</li>
+              ))}
+            </ul>
+          </details>
         </section>
       ) : null}
+
+      {report.salary ? (
+        <section aria-labelledby="sal-h">
+          <h2 id="sal-h" className="mb-1 text-lg font-semibold">무급여·급여 삭감 이력</h2>
+          <p className="text-sm">
+            삭감 상태로 보낸 기간 <span className="num">{report.salary.months}</span>개월
+            {report.salary.active ? ' (종료 시점에도 삭감 중)' : ' (종료 전 복원됨)'} · 팀이 개인적으로 떠안은 금액 <span className="num">{formatMoney(report.salary.burden)}</span> (회사 현금에서는 차감하지 않음)
+          </p>
+          <p className="num mt-1 text-sm text-muted">
+            현재 급여 기준 월 이익 {formatMoney(report.salary.currentProfit)} · 정상 급여를 지급한다면 월 이익 {formatMoney(report.salary.normalProfit)}
+          </p>
+        </section>
+      ) : null}
+
+      <section aria-labelledby="learn-h">
+        <h2 id="learn-h" className="mb-1 text-lg font-semibold">학습·의사결정 기록 (회사 성과 점수와 별개)</h2>
+        <p className="num text-sm">
+          좋음 {report.learning.verdicts.strong} · 보통 {report.learning.verdicts.ok} · 아쉬움 {report.learning.verdicts.weak}
+        </p>
+        <p className="mt-1 text-sm text-muted">{report.learning.note}</p>
+      </section>
 
       {report.reasons.length > 0 ? (
         <section aria-labelledby="cb-h">

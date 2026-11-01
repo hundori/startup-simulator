@@ -77,6 +77,13 @@ export interface SimState {
   tam?: number;
   /** 최근 월 매출 기록(최대 7개월). 성장률 계산용. 이전 저장본에는 없다. */
   revHist?: number[];
+  /** 최근 월말 현금 기록(최대 4개). 최근 현금 증감 판정용. 이전 저장본에는 없다. */
+  cashHist?: number[];
+  /**
+   * 무급여·급여 삭감 기록. normal=삭감 전 1인당 월급, months=삭감 상태로 보낸 개월 수,
+   * burden=팀이 개인적으로 떠안은 누적 금액(회사 현금에서 차감하지 않는다), since=시작 월, asks=급여 복원 결정을 물은 횟수.
+   */
+  salaryCut?: { normal: number; months: number; burden: number; since: number; asks: number };
   /** 소액 창업 규모 배율(0.02~1). 초기 자본이 5,000만원 미만이면 금액·고객 규모를 함께 줄인다. 이전 저장본에는 없다(=1). */
   scale?: number;
   flags: string[];
@@ -84,6 +91,9 @@ export interface SimState {
 
 export type CondMetric =
   | 'cash'
+  | 'finStatus' // 0=현금 위기, 1=적자, 2=흑자 (financialStatus)
+  | 'cashTrend3' // 최근 3개월 현금 증감(표준 규모)
+  | 'salaryCutMonths' // 급여 삭감 상태가 이어진 개월 수
   | 'monthlyRevenue'
   | 'customers'
   | 'quality'
@@ -125,6 +135,7 @@ export interface Effects {
   acqBasePct?: number;
   cogsRatio?: number;
   capPerHeadPct?: number;
+  salaryRestorePct?: number; // 삭감된 급여를 원래 수준으로 되돌리는 비율(0~1)
   salaryPct?: number; // 1인당 월급 증감(무급여 전환·급여 삭감 등)
   aiLevel?: number; // AI 도입 정도 증감(0~1 범위로 제한)
   tamPct?: number; // 겨냥 시장 규모 증감(틈새 집중은 줄이고, 새 시장 진출은 늘린다)
@@ -147,6 +158,9 @@ export interface EventOption {
   cost?: number;
   minHeadcount?: number;
   onlyFor?: BusinessType[];
+  onlyForModel?: RevenueModel[]; // 이 수익모델일 때만 보인다
+  notForModel?: RevenueModel[]; // 이 수익모델이면 숨긴다
+  showWhen?: Cond[]; // 회사 상태가 이 조건을 만족할 때만 보인다(흑자·적자별로 다른 대안을 낼 때)
   requires?: Cond[];
   requiresText?: string;
   outcomes: Outcome[];
@@ -169,6 +183,8 @@ export interface GameEvent {
   boosts?: { when: Cond[]; add: number }[];
   discussionPrompts: string[];
   options: EventOption[];
+  /** 회사 상태(현금·이익·가동률 등)에 따라 도입문·토론 질문을 바꾼다. 위에서부터 처음 맞는 것을 쓴다. */
+  variants?: { when: Cond[]; title?: string; situation?: string; context?: string; discussionPrompts?: string[] }[];
 }
 
 // --- UI에 전달되는 공개 타입 (효과·결과 없음) ---
@@ -193,6 +209,8 @@ export interface ResolvedEvent {
   discussionPrompts: string[];
   options: PublicOption[];
   emergency?: boolean; // 런웨이 1개월 미만에서 열리는 긴급 생존 카드
+  followup?: boolean; // 연차 이벤트 수에 포함되지 않는 추가 결정(긴급 카드·급여 복원)
+  facts: string[]; // 이 서술이 근거로 삼은 현재 지표(화면 표시와 같은 값)
   index: number; // 이번 연차 내 순서 (0부터)
   total: number; // 이번 연차 이벤트 수
 }
@@ -242,6 +260,23 @@ export interface DecisionRecord {
   runwayBefore?: number | null; // 결정 전 런웨이(null=흑자 구조)
   runwayAfter?: number | null; // 다음 결정 시점의 런웨이
   notes: string[];
+  /** 결정 당시 질문(이벤트 도입문)과 보여 준 모든 대안. 기록 내보내기용. 이전 저장본에는 없다. */
+  situation?: string;
+  optionsShown?: { label: string; cost: number; fixedMin: number; fixedMax: number; available: boolean; reasons: string[] }[];
+  /** 결정 직전의 재무 상태 판정 */
+  finStatusBefore?: 'crunch' | 'deficit' | 'surplus';
+  /** 현금 변화 분해(만원). total = oneTime + inflow + operating + other */
+  cashFlow?: CashFlow;
+}
+
+export interface CashFlow {
+  oneTime: number; // 일회성 지출(음수)
+  inflow: number; // 투자·지원금·차입 등 자금 유입(양수)
+  operating: number; // 경과 기간 영업 현금흐름(매출−비용 합)
+  other: number; // 기타 조정(반올림 등)
+  total: number;
+  months: number;
+  detail: { revenue: number; cogs: number; payroll: number; overhead: number; marketing: number; interest: number };
 }
 
 export type Phase = 'intro' | 'event' | 'outcome' | 'finished';
@@ -266,7 +301,10 @@ export interface Game {
 }
 
 export interface Score {
+  /** 회사 성과 점수(재무·성장·품질·팀·평판). 학습·의사결정 평가와는 별개다. */
   total: number;
+  /** 변경 전 성장 산식(월 매출 ÷ 초기 자본의 15%)으로 계산한 값. 비교용. */
+  legacy: { growth: number; total: number };
   grade: 'A' | 'B' | 'C' | 'D' | 'F';
   bankrupt: boolean;
   parts: {

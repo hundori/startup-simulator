@@ -1,5 +1,5 @@
 import type { GameEvent } from '../types';
-import { gte, lte } from './helpers';
+import { CRUNCH, DEFICIT, NOT_SURPLUS, SURPLUS, gte, lte } from './helpers';
 
 // 3년 차 — 확장. 효과 수치는 교육용 가정이다.
 export const STAGE3_EVENTS: GameEvent[] = [
@@ -202,11 +202,30 @@ export const STAGE3_EVENTS: GameEvent[] = [
       '가격을 올렸을 때 떠날 고객과 남을 고객은 누구인가?',
       '요금 체계를 단순하게 둘 것인가, 세분화할 것인가?',
     ],
+    variants: [
+      {
+        when: SURPLUS,
+        title: '수익모델·가격 개편: 이익을 더 키울 구조인가',
+        situation:
+          '{company}는 고객이 늘면서 월 {profit}의 이익도 내고 있습니다. 지금 가격 개편은 위기 대응이 아니라 수익 구조를 더 키울 수 있는지의 문제입니다. 현재 돈을 내는 쪽은 {payer}이고, 과금 기준은 "{billing}"입니다. 단가를 올리면 성장이 둔해지고, 올리지 않으면 이익 증가가 고객 증가에 묶입니다.',
+        discussionPrompts: [
+          '지금의 이익은 정상 급여·정상 비용을 반영한 것인가?',
+          '{payer}가 내는 돈에서 올릴 수 있는 부분과 건드리면 안 되는 부분은?',
+          '이익이 나는 지금 가격을 바꾸는 것이 유리한가, 불리한가?',
+        ],
+      },
+      {
+        when: [lte('finStatus', 1)],
+        situation:
+          '{company}의 고객 수는 늘었는데 이익이 따라오지 않습니다(월 이익 {profit}). 가격 구조를 다시 짜야 한다는 의견이 나옵니다. 현재 돈을 내는 쪽은 {payer}이고, 과금 기준은 "{billing}"입니다. 가격을 올리면 이탈이 걱정되고, 올리지 않으면 성장할수록 적자가 커질 수 있습니다.',
+      },
+    ],
     options: [
       {
         id: 'raise-price',
-        label: '가격 인상 + 기존 고객 유예 기간',
-        description: '신규 고객부터 올리고 기존 고객에게는 3개월 유예를 준다.',
+        notForModel: ['commission'],
+        label: '가격 인상 + 기존 {payer} 유예 기간',
+        description: '신규 {payer}부터 올리고 기존 {payer}에게는 3개월 유예를 준다. 과금 기준: {billing}.',
         cost: 100,
         outcomes: [
           {
@@ -223,14 +242,51 @@ export const STAGE3_EVENTS: GameEvent[] = [
         ],
       },
       {
+        id: 'raise-take-rate',
+        onlyForModel: ['commission'],
+        label: '수수료율 인상 + 기존 공급자 유예 기간',
+        description:
+          '신규 거래부터 수수료율을 올리고 기존 {supplier}에게는 3개월 유예를 준다. 수수료를 내는 쪽은 {payer}이며, 이용자가 내는 금액은 그대로다.',
+        cost: 100,
+        outcomes: [
+          {
+            when: [gte('quality', 55), gte('reputation', 45)],
+            effects: { arpuPct: 0.15, churnRate: 0.005, customersPct: -0.03, flags: ['price-up'] },
+            text: '공급자가 플랫폼의 고객 유입 효과를 인정해 수수료 인상을 받아들였습니다. 이용자 쪽 이탈은 작았고 거래당 수익이 올랐습니다.',
+            verdict: 'strong',
+          },
+          {
+            effects: { arpuPct: 0.12, churnRate: 0.02, customersPct: -0.1, reputation: -3, flags: ['price-up'] },
+            text: '공급자가 유입 효과에 비해 수수료가 높다고 느껴 일부가 다른 채널로 옮겼습니다. 공급이 줄면서 이용자 경험도 나빠졌습니다.',
+            verdict: 'weak',
+          },
+        ],
+      },
+      {
         id: 'tiering',
+        notForModel: ['commission'],
         label: '요금제 세분화 (기본·프리미엄)',
-        description: '고객이 자신에게 맞는 가격대를 고르게 한다.',
+        description: '{payer}가 자신에게 맞는 가격대를 고르게 한다. 무엇에 대해 더 내는지(기능·한도·노출)를 명확히 나눈다.',
         cost: 400,
         outcomes: [
           {
             effects: { arpuPct: 0.1, customersPct: 0.02, quality: 1, flags: ['tiered'] },
-            text: '고객이 자신에게 맞는 가격을 고를 수 있게 하자 평균 단가가 올랐습니다.',
+            text: '{payer}가 자신에게 맞는 가격을 고를 수 있게 하자 평균 단가가 올랐습니다.',
+            verdict: 'strong',
+          },
+        ],
+      },
+      {
+        id: 'tier-commission',
+        onlyForModel: ['commission'],
+        label: '거래액·노출 등급별 수수료와 유료 노출 상품',
+        description:
+          '{supplier}가 거래액 구간에 따라 다른 수수료율을 내고, 상단 노출을 원하는 공급자는 노출 상품에 대해 추가로 지불한다. 이용자는 지금처럼 무료로 이용한다.',
+        cost: 400,
+        outcomes: [
+          {
+            effects: { arpuPct: 0.1, customersPct: 0.02, quality: 1, flags: ['tiered'] },
+            text: '거래가 많은 공급자는 수수료 부담이 낮아지고, 노출이 필요한 공급자는 노출 상품을 샀습니다. 이용자 경험을 해치지 않으면서 거래당 평균 수익이 올랐습니다.',
             verdict: 'strong',
           },
         ],
@@ -279,6 +335,7 @@ export const STAGE3_EVENTS: GameEvent[] = [
     boosts: [
       { when: [lte('runway', 9)], add: 3 },
       { when: [lte('monthlyProfit', 0)], add: 1 },
+      { when: SURPLUS, add: -0.5 },
     ],
     situation:
       '{company}의 현금이 줄어드는 속도가 빨라졌습니다. 조언자들은 성장 지표를 요구하지만 현금 흐름은 더 위험해졌습니다. 앞으로 1년 동안 성장과 생존 중 무엇에 무게를 둘지 정해야 합니다.',
@@ -286,6 +343,29 @@ export const STAGE3_EVENTS: GameEvent[] = [
       '줄이면 아픈 비용과 줄여도 티가 안 나는 비용은 무엇인가?',
       '성장 속도를 늦추면 투자 유치에 불리한가?',
       '현금이 6개월 미만일 때 어떤 결정을 해야 하는가?',
+    ],
+    variants: [
+      {
+        when: SURPLUS,
+        title: '잉여 현금 재투자와 성장 속도',
+        situation:
+          '{company}는 지금 월 {profit}의 이익을 내고 있고, 현금은 {cash}입니다. 최근 현금도 늘어났습니다. 쟁점은 생존이 아니라 잉여 현금을 어디에 얼마나 재투자해 성장 속도를 높일지입니다. 속도를 높이면 이익이 줄 수 있고, 너무 아끼면 시장의 기회를 놓칠 수 있습니다.',
+        discussionPrompts: [
+          '재투자한 돈이 이익을 얼마나 키우는지 어떻게 확인할 것인가?',
+          '지금의 이익은 정상 급여·정상 비용을 반영한 것인가?',
+          '현금을 쌓아 두는 것과 성장에 쓰는 것 중 투자 유치에 더 유리한 것은?',
+        ],
+      },
+      {
+        when: DEFICIT,
+        situation:
+          '{company}는 매달 {loss}씩 적자가 나고 있고, 현금은 {cash}(약 {runway}개월분)입니다. 조언자들은 성장 지표를 요구하지만 적자가 이어지면 선택지가 줄어듭니다. 앞으로 1년 동안 성장과 생존 중 무엇에 무게를 둘지 정해야 합니다.',
+      },
+      {
+        when: CRUNCH,
+        situation:
+          '{company}의 현금 {cash}은 매달 {loss}의 적자로 약 {runway}개월 안에 바닥납니다. 조언자들은 성장 지표를 요구하지만 지금은 생존이 먼저입니다. 앞으로 1년 동안 성장과 생존 중 무엇에 무게를 둘지 정해야 합니다.',
+      },
     ],
     options: [
       {
@@ -309,6 +389,7 @@ export const STAGE3_EVENTS: GameEvent[] = [
       },
       {
         id: 'profit-first',
+        showWhen: NOT_SURPLUS,
         label: '수익성 우선 (적자 사업·채널 정리)',
         description: '성장률을 낮추더라도 현금 흐름부터 바로잡는다.',
         cost: 200,
@@ -341,6 +422,7 @@ export const STAGE3_EVENTS: GameEvent[] = [
       },
       {
         id: 'bridge',
+        showWhen: NOT_SURPLUS,
         label: '추가 자금 조달 (브릿지 대출 + 투자 협의)',
         description: '이자 부담을 지고 시간을 번다.',
         cost: 0,
@@ -348,6 +430,40 @@ export const STAGE3_EVENTS: GameEvent[] = [
           {
             effects: { cash: 4000, debt: 4000, morale: 1 },
             text: '이자 부담이 늘었지만 단기 위험은 넘겼습니다. 구조적인 문제는 그대로 남았습니다.',
+            verdict: 'ok',
+          },
+        ],
+      },
+      {
+        id: 'reinvest-surplus',
+        showWhen: SURPLUS,
+        label: '잉여 현금을 제품·품질 개선에 재투자 (채용 없이)',
+        description: '이익으로 쌓인 현금의 일부를 품질·기능 개선과 고객 경험에 쓴다. 일회성 지출이라 월 고정비는 늘지 않는다.',
+        cost: 600,
+        outcomes: [
+          {
+            when: [gte('quality', 40)],
+            effects: { quality: 5, reputation: 2, acqBasePct: 0.05, flags: ['reinvest'] },
+            text: '쌓인 이익을 품질에 쓰자 이탈이 줄고 평판이 올랐습니다. 월 고정비를 늘리지 않아 이익 구조는 유지됐습니다.',
+            verdict: 'strong',
+          },
+          {
+            effects: { quality: 3, reputation: 1, flags: ['reinvest'] },
+            text: '개선 효과는 있었지만 근본 문제를 풀지 못해 기대보다 작았습니다.',
+            verdict: 'ok',
+          },
+        ],
+      },
+      {
+        id: 'save-buffer',
+        showWhen: SURPLUS,
+        label: '현재 속도를 유지하며 현금을 비상 자금으로 쌓는다',
+        description: '새 지출을 늘리지 않고 이익을 현금으로 쌓아 둔다. 안전하지만 성장 기회를 일부 놓칠 수 있다.',
+        cost: 0,
+        outcomes: [
+          {
+            effects: { morale: 1, acqBasePct: -0.03, flags: ['buffer'] },
+            text: '현금 여유는 커졌지만 경쟁사가 먼저 시장을 넓혔습니다. 안정성과 속도 사이에서 안정성을 택한 결정입니다.',
             verdict: 'ok',
           },
         ],

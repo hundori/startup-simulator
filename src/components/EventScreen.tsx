@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import type { Game, ResolvedEvent } from '@/engine';
-import { MIN_RATIONALE_LENGTH, computeRunway, explainEvent, formatFixedDelta, formatMoney, reasonLabel, shortIdea } from '@/engine';
+import { MIN_RATIONALE_LENGTH, computeRunway, explainEvent, formatFixedDelta, formatMoney, monthToLabel, reasonLabel, shortIdea, shortTarget } from '@/engine';
 import Assumptions from './Assumptions';
 import Choice from './Choice';
 import { Badge, Button, Callout, STAGE_LABEL } from './ui';
@@ -128,20 +128,28 @@ export default function EventScreen({
       <header>
         <p className="flex flex-wrap items-center gap-2 text-sm text-muted">
           <span>{STAGE_LABEL[event.stage]}</span>
-          {event.emergency ? (
-            <Badge tone="danger">긴급 · 연차 이벤트 밖에서 열린 카드</Badge>
+          {event.followup ? (
+            <Badge tone={event.emergency ? 'danger' : 'warn'}>
+              {event.emergency ? '긴급 카드' : '급여 복원 결정'} · 연차 이벤트 수에 포함되지 않음
+            </Badge>
           ) : (
             <span className="num">
               · 이벤트 {event.index + 1} / {event.total}
             </span>
           )}
+          <span className="num">· {monthToLabel(game.sim.month).replace(/ 시점$/, '')} 시점</span>
           <Badge tone="accent">{reasonLabel(event.reason)}</Badge>
         </p>
         <h1 className="mt-3 text-2xl font-bold sm:text-3xl">{event.title}</h1>
         <div className="mt-4 border-l-[3px] border-brass pl-4">
           <p className="leading-relaxed">{event.situation}</p>
           {event.context ? <p className="mt-2 text-sm text-muted">{event.context}</p> : null}
-          <p className="mt-3 text-xs text-muted">우리 아이디어: {shortIdea(game.setup.idea, 60)} · 대상: {game.setup.targetCustomer}</p>
+          <ul className="num mt-3 space-y-0.5 rounded-sm bg-paper px-3 py-2 text-xs text-muted" aria-label="이 서술의 근거 지표">
+            {event.facts.map((f) => (
+              <li key={f}>{f}</li>
+            ))}
+          </ul>
+          <p className="mt-2 text-xs text-muted" title={game.setup.targetCustomer}>우리 아이디어: {shortIdea(game.setup.idea, 60)} · 대상: {shortTarget(game.setup.targetCustomer)}</p>
         </div>
       </header>
 
@@ -192,7 +200,7 @@ export default function EventScreen({
 
       <div>
         <label htmlFor="rationale" className="text-sm font-semibold">
-          토론 근거 <span className="font-normal text-muted">(필수, {MIN_RATIONALE_LENGTH}자 이상)</span>
+          토론 근거 <span className="font-normal text-muted">(필수, {MIN_RATIONALE_LENGTH}자 이상 · 글자 수만 확인하며 내용의 타당성은 평가하지 않습니다)</span>
         </label>
         <textarea
           id="rationale"
@@ -226,9 +234,14 @@ export default function EventScreen({
         </Callout>
       ) : null}
 
-      <Button type="submit" disabled={!canSubmit} className="w-full sm:w-auto">
-        이 결정으로 확정
-      </Button>
+      <div className="flex flex-wrap items-center gap-3">
+        <Button type="submit" disabled={!canSubmit} aria-describedby="submit-why" className="w-full sm:w-auto">
+          이 결정으로 확정
+        </Button>
+        <p id="submit-why" className={`text-sm ${canSubmit ? 'text-muted' : 'font-semibold text-loss'}`}>
+          {canSubmit ? helper : `확정할 수 없는 이유: ${helper}`}
+        </p>
+      </div>
     </form>
   );
 }

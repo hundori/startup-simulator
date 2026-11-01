@@ -1,5 +1,5 @@
 import type { DecisionRecord, Game, MetricSnapshot } from '@/engine';
-import { explainOutcome, formatMoney, formatNumber, formatSigned, formatSignedMoney, reasonLabel } from '@/engine';
+import { explainOutcome, formatMoney, yearSummary, formatNumber, formatSigned, formatSignedMoney, reasonLabel } from '@/engine';
 import Assumptions from './Assumptions';
 import { Badge, Button, Callout, VERDICT_LABEL } from './ui';
 
@@ -70,6 +70,73 @@ function Result({ d }: { d: DecisionRecord }) {
   );
 }
 
+function CashBreakdown({ d }: { d: DecisionRecord }) {
+  const cf = d.cashFlow;
+  if (!cf) return null;
+  const sg = (v: number) => (v === 0 ? '0' : formatSignedMoney(v));
+  const dt = cf.detail;
+  const start = d.before.cash;
+  const end = d.afterPeriod.cash;
+  const check = start + cf.oneTime + cf.inflow + cf.operating + cf.other;
+  return (
+    <section aria-labelledby="cash-h" className="space-y-2">
+      <h2 id="cash-h" className="text-lg font-semibold">왜 현금이 이만큼 변했나</h2>
+      <div className="overflow-x-auto rounded-md border border-line bg-surface">
+        <table className="w-full min-w-[26rem] text-sm">
+          <caption className="sr-only">현금 변화의 구성</caption>
+          <tbody className="divide-y divide-line">
+            <tr><th scope="row" className="px-3 py-2 text-left font-normal">결정 전 현금</th><td className="num px-3 py-2 text-right">{formatMoney(start)}</td></tr>
+            <tr><th scope="row" className="px-3 py-2 text-left font-normal">① 일회성 지출 <span className="text-xs text-muted">(결정 즉시 한 번)</span></th><td className="num px-3 py-2 text-right font-semibold">{sg(cf.oneTime)}</td></tr>
+            <tr><th scope="row" className="px-3 py-2 text-left font-normal">② 투자·지원금·차입 등 자금 유입</th><td className="num px-3 py-2 text-right font-semibold">{sg(cf.inflow)}</td></tr>
+            <tr>
+              <th scope="row" className="px-3 py-2 text-left font-normal">
+                ③ 경과 {cf.months}개월의 영업 현금흐름
+                <span className="mt-0.5 block text-xs text-muted">
+                  매출 {formatMoney(dt.revenue)} − 원가 {formatMoney(dt.cogs)} − 인건비 {formatMoney(dt.payroll)} − 운영비 {formatMoney(dt.overhead)} − 마케팅 {formatMoney(dt.marketing)} − 이자 {formatMoney(dt.interest)}
+                </span>
+              </th>
+              <td className="num px-3 py-2 text-right font-semibold">{sg(cf.operating)}</td>
+            </tr>
+            <tr><th scope="row" className="px-3 py-2 text-left font-normal">④ 기타 조정</th><td className="num px-3 py-2 text-right font-semibold">{sg(cf.other)}</td></tr>
+            <tr className="bg-paper"><th scope="row" className="px-3 py-2 text-left font-semibold">{cf.months}개월 뒤 현금</th><td className="num px-3 py-2 text-right font-semibold">{formatMoney(end)}</td></tr>
+          </tbody>
+        </table>
+      </div>
+      <p className="num text-xs text-muted">
+        검산: {formatMoney(start)} {sg(cf.oneTime)} {sg(cf.inflow)} {sg(cf.operating)} {sg(cf.other)} = {formatMoney(check)} {check === end ? '(실제 현금과 일치)' : '(실제 현금과 차이가 있습니다)'}.
+        금액은 만원 단위 정수로 계산해 반올림 차이가 없고, 기타 조정은 위 세 항목으로 설명되지 않는 나머지입니다{cf.other === 0 ? '(이번에는 0)' : ''}.
+      </p>
+    </section>
+  );
+}
+
+function YearEndSummary({ game }: { game: Game }) {
+  const y = yearSummary(game);
+  return (
+    <section aria-labelledby="year-h" className="space-y-3 rounded-md border border-line border-l-[3px] border-l-brass bg-surface p-4">
+      <h2 id="year-h" className="text-lg font-semibold">{y.title}</h2>
+      <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+        {y.rows.map((r) => (
+          <div key={r.label}>
+            <dt className="text-xs text-muted">{r.label}</dt>
+            <dd className="num font-semibold">{r.value}</dd>
+          </div>
+        ))}
+      </dl>
+      <div className="grid gap-4 text-sm sm:grid-cols-2">
+        <div>
+          <p className="font-semibold">핵심 위험</p>
+          <ul className="mt-1 list-disc space-y-1 pl-5 text-muted">{y.risks.map((r) => <li key={r}>{r}</li>)}</ul>
+        </div>
+        <div>
+          <p className="font-semibold">다음 검증 과제</p>
+          <ul className="mt-1 list-disc space-y-1 pl-5 text-muted">{y.checks.map((r) => <li key={r}>{r}</li>)}</ul>
+        </div>
+      </div>
+    </section>
+  );
+}
+
 export default function OutcomeScreen({ game, onContinue }: { game: Game; onContinue: () => void }) {
   const d = game.lastOutcome;
   if (!d) return null;
@@ -94,6 +161,10 @@ export default function OutcomeScreen({ game, onContinue }: { game: Game; onCont
       ) : null}
 
       <Result d={d} />
+
+      <CashBreakdown d={d} />
+
+      {game.planIndex + 1 >= game.plan.length ? <YearEndSummary game={game} /> : null}
 
       <Assumptions basis={explainOutcome(game, d)} />
 

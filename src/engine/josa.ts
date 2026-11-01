@@ -35,17 +35,36 @@ export interface TextVars {
   company: string;
   target: string;
   idea: string;
+  [extra: string]: string;
 }
 
 const VALID_PAIRS = new Set(['은/는', '이/가', '을/를', '과/와', '으로/로', '이라/라', '이에요/예요', '이야/야', '이란/란']);
+const PARTICLE_PAIR: Record<string, JosaPair> = {
+  이: '이/가', 가: '이/가', 은: '은/는', 는: '은/는', 을: '을/를', 를: '을/를', 와: '과/와', 과: '과/와', 으로: '으로/로', 로: '으로/로',
+};
 
-/** "{company}", "{target:이/가}" 같은 자리표시자를 채운다. 조사를 지정하면 받침에 맞춰 붙인다. */
+/**
+ * "{company}", "{target:이/가}" 같은 자리표시자를 채운다. 조사를 지정하면 받침에 맞춰 붙인다.
+ * 지정하지 않았더라도 자리표시자 바로 뒤에 조사(이·가·은·는·을·를·와·과·로·으로)가 붙어 있으면
+ * 값의 받침에 맞게 고쳐 쓴다(예: "{company}이 쓰는" → "네일핏 AI가 쓰는").
+ */
 export function fillText(text: string, vars: TextVars): string {
-  return text.replace(/\{(company|target|idea)(?::([^}]+))?\}/g, (_m, key: keyof TextVars, pair?: string) => {
+  const keys = Object.keys(vars).join('|');
+  const fixed = text.replace(new RegExp(`\\{(${keys})\\}(으로|이|가|은|는|을|를|와|과|로)(?=[\\s,.)"'?!]|$)`, 'g'), (_m, key: string, p: string) =>
+    withJosa(vars[key], PARTICLE_PAIR[p]),
+  );
+  return fixed.replace(new RegExp(`\\{(${keys})(?::([^}]+))?\\}`, 'g'), (_m, key: string, pair?: string) => {
     const value = vars[key];
     if (pair && VALID_PAIRS.has(pair)) return withJosa(value, pair as JosaPair);
     return value;
   });
+}
+
+/** 긴 대상 고객 문구에서 반복해 쓸 요약 명칭을 만든다(첫 구절만, 16자 이내). */
+export function shortTarget(target: string, max = 16): string {
+  const t = target.trim().replace(/\s+/g, ' ');
+  const first = t.split(/[,，(（·/]| 중 | 및 /)[0].trim() || t;
+  return first.length > max ? `${first.slice(0, max - 1).trim()}…` : first;
 }
 
 /** 아이디어는 길 수 있으므로 지문에는 첫 문장만 짧게 쓴다. */

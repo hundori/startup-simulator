@@ -78,6 +78,35 @@ export function computeRunway(s: SimState): number | null {
   return s.cash / -profit;
 }
 
+/**
+ * 재무 상태 판정. 이벤트 서술, 이벤트 선정 점수, 화면 표시가 모두 이 함수를 쓴다.
+ * - crunch(현금 위기): 현금이 0 이하이거나, 적자인데 런웨이가 4개월 미만
+ * - deficit(적자): 현재 고객·비용 기준 월 이익이 0 미만 (런웨이는 4개월 이상)
+ * - surplus(흑자): 현재 고객·비용 기준 월 이익이 0 이상
+ * 월 이익은 projectedMonthlyProfit(현재 고객 수 × 고객당 매출 − 원가·인건비·운영비·마케팅·이자) 기준이다.
+ */
+export type FinStatus = 'crunch' | 'deficit' | 'surplus';
+export const CRUNCH_RUNWAY_MONTHS = 4;
+export function financialStatus(s: SimState): FinStatus {
+  if (s.cash <= 0) return 'crunch';
+  const profit = projectedMonthlyProfit(s);
+  if (profit >= 0) return 'surplus';
+  return s.cash / -profit < CRUNCH_RUNWAY_MONTHS ? 'crunch' : 'deficit';
+}
+
+/** 급여가 정상 수준보다 낮은 상태인가 */
+export function isSalaryCut(s: SimState): boolean {
+  return !!s.salaryCut && s.avgSalary < s.salaryCut.normal - 0.05;
+}
+/** 정상 급여와 현재 급여의 차이 × 인원 = 매달 팀이 개인적으로 부담하는 금액 */
+export function salaryGapPerMonth(s: SimState): number {
+  return isSalaryCut(s) && s.salaryCut ? Math.round((s.salaryCut.normal - s.avgSalary) * s.headcount) : 0;
+}
+/** 급여를 정상 수준으로 지급한다고 가정했을 때의 월 이익(무급여 상태의 이익과 구별하기 위한 값) */
+export function normalSalaryProfit(s: SimState): number {
+  return projectedMonthlyProfit(s) - salaryGapPerMonth(s);
+}
+
 export function acquisitionRate(s: SimState): number {
   const u = utilization(s);
   const rep = 0.6 + (0.8 * s.reputation) / 100;
@@ -105,6 +134,15 @@ export function metricValue(s: SimState, metric: CondMetric): number {
     }
     case 'monthlyProfit':
       return projectedMonthlyProfit(s) / scaleOf(s);
+    case 'finStatus':
+      return { crunch: 0, deficit: 1, surplus: 2 }[financialStatus(s)];
+    case 'cashTrend3': {
+      const h = s.cashHist ?? [];
+      if (h.length < 2) return 0;
+      return (h[h.length - 1] - h[0]) / scaleOf(s);
+    }
+    case 'salaryCutMonths':
+      return isSalaryCut(s) && s.salaryCut ? s.salaryCut.months : 0;
     case 'growth6': {
       const h = s.revHist ?? [];
       if (h.length < 2) return 0;
@@ -185,6 +223,8 @@ export interface MonthResult {
   notes: string[];
   bankrupt: boolean;
   profit: number;
+  /** 이번 달 영업 현금흐름의 구성(만원). profit = revenue − cogs − payroll − overhead − marketing − interest */
+  parts: { revenue: number; cogs: number; payroll: number; overhead: number; marketing: number; interest: number };
 }
 
 export function isBankrupt(s: SimState): boolean {
@@ -204,17 +244,22 @@ export function advanceMonth(s: SimState): MonthResult {
 
   const revenue = Math.round(((s.customers + customers) / 2) * s.arpu);
   const cogs = Math.round(revenue * s.cogsRatio);
-  const costs = payroll(s) + s.overhead + s.marketingBudget + monthlyInterest(s) + cogs;
+  const parts = { revenue, cogs, payroll: payroll(s), overhead: s.overhead, marketing: s.marketingBudget, interest: monthlyInterest(s) };
+  const costs = parts.payroll + s.overhead + s.marketingBudget + parts.interest + cogs;
   const profit = revenue - costs;
   const cash = s.cash + profit;
 
   const overload = Math.max(0, u - 1);
+  // 급여 삭감이 길어지면 팀 사기가 서서히 떨어진다(삭감 6개월 이후 매달 −1.5).
+  const cutNow = isSalaryCut(s) && !!s.salaryCut;
+  const cutDrain = cutNow && (s.salaryCut?.months ?? 0) >= 6 ? 1.5 : 0;
   let quality = clamp(s.quality - 0.3 - Math.min(4, 3 * overload), 0, 100);
   let morale = clamp(
     s.morale +
       (60 - s.morale) * 0.03 +
       (profit > 0 ? 0.5 : 0) -
       (cash < 0 ? 2 : 0) -
+      cutDrain -
       Math.min(5, 4 * overload),
     0,
     100,
@@ -249,6 +294,10 @@ export function advanceMonth(s: SimState): MonthResult {
     acqBase: Math.round(s.acqBase * (1 - MARKET_ACQ_DECAY * (s.pressure ?? 1)) * 100) / 100,
     insolvencyMonths: cash < 0 ? s.insolvencyMonths + 1 : 0,
     revHist: [...(s.revHist ?? [s.monthlyRevenue]), revenue].slice(-7),
+    cashHist: [...(s.cashHist ?? [s.cash]), cash].slice(-4),
+    salaryCut: cutNow && s.salaryCut
+      ? { ...s.salaryCut, months: s.salaryCut.months + 1, burden: s.salaryCut.burden + salaryGapPerMonth(s) }
+      : s.salaryCut,
   };
   const bankrupt = isBankrupt(next);
   if (bankrupt) {
@@ -258,7 +307,8 @@ export function advanceMonth(s: SimState): MonthResult {
         : '현금이 2개월 연속 마이너스여서 회사가 파산했습니다.',
     );
   }
-  return { state: next, notes, bankrupt, profit };
+  if (cutDrain > 0) notes.push('급여 삭감이 길어지며 팀 사기가 떨어지고 있습니다.');
+  return { state: next, notes, bankrupt, profit, parts };
 }
 
 // ---------- 결정 효과 ----------
@@ -269,7 +319,16 @@ export function applyEffects(s: SimState, e: Effects): SimState {
   customers = Math.max(0, Math.round(customers));
 
   let headcount = s.headcount;
-  let avgSalary = s.avgSalary * (1 + (e.salaryPct ?? 0));
+  let salaryCut = s.salaryCut;
+  let avgSalary = s.avgSalary;
+  if (e.salaryPct && e.salaryPct < 0) {
+    if (!salaryCut) salaryCut = { normal: s.avgSalary, months: 0, burden: 0, since: s.month, asks: 0 };
+    else if (!isSalaryCut(s)) salaryCut = { ...salaryCut, normal: s.avgSalary, since: s.month };
+  }
+  avgSalary = avgSalary * (1 + (e.salaryPct ?? 0));
+  if (e.salaryRestorePct && salaryCut) {
+    avgSalary = avgSalary + Math.max(0, salaryCut.normal - avgSalary) * Math.min(1, e.salaryRestorePct);
+  }
   if (e.headcount && e.headcount > 0) {
     avgSalary = (avgSalary * headcount + HIRE_SALARY * scaleOf(s) * e.headcount) / (headcount + e.headcount);
     headcount += e.headcount;
@@ -288,6 +347,7 @@ export function applyEffects(s: SimState, e: Effects): SimState {
     reputation: r1(clamp(s.reputation + (e.reputation ?? 0), 0, 100)),
     headcount,
     avgSalary: Math.round(avgSalary * 10) / 10,
+    salaryCut,
     marketingBudget: Math.max(0, s.marketingBudget + scaleMoney(s, e.marketingBudget ?? 0)),
     overhead: Math.max(0, s.overhead + scaleMoney(s, e.overhead ?? 0)),
     arpu: Math.round(s.arpu * (1 + (e.arpuPct ?? 0)) * 100) / 100,

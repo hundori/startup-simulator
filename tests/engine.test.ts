@@ -28,6 +28,10 @@ import {
   utilization,
   validateSetup,
   type CustomerType,
+  SALARY_EVENT_ID,
+  shortTarget,
+  revenueStructure,
+  yearSummary,
   type Game,
   type RevenueModel,
   type Stage,
@@ -670,5 +674,144 @@ describe('K. 선택을 직접 짚는 인사이트', () => {
     const g = play({ capital: 20000 }, cheapest);
     const old = { ...g, decisions: g.decisions.map((d) => ({ ...d, fixedBefore: undefined, fixedAfter: undefined, runwayBefore: undefined, runwayAfter: undefined })) };
     expect(generateReport(old).choiceInsights).toEqual([]);
+  });
+});
+
+describe('L. 시나리오 정합성·재무 모델·최종 평가 (사용자 점검 항목 회귀)', () => {
+  const REPRO = { businessType: 'platform', customerType: 'b2c', revenueModel: 'commission', capital: 3000, members: 3, targetCustomer: '네일숍을 처음 찾는 20~30대 여성 이용자' } as const;
+  function at(eventId: string, over: Partial<Game['sim']> = {}, setup: Parameters<typeof newGame>[0] = REPRO): Game {
+    const g = beginSimulation(newGame({ mode: 'full', ...setup }));
+    return { ...g, plan: [eventId], planIndex: 0, sim: { ...g.sim, ...over } };
+  }
+  const text = (ev: NonNullable<ReturnType<typeof resolveEvent>>) =>
+    [ev.title, ev.situation, ev.context ?? '', ...ev.discussionPrompts, ...ev.options.map((o) => o.label + o.description)].join('\n');
+
+  it('L1 현금이 늘고 흑자인 회사에는 자금 악화 문구가 나오지 않는다', () => {
+    for (const id of ['e14-growth-vs-profit', 'e13-model-shift']) {
+      const g = at(id, { cash: 7694, cashHist: [6119, 6800, 7200, 7694], monthlyRevenue: 9000, customers: 3000 });
+      const ev = resolveEvent(g)!;
+      expect(text(ev), id).not.toMatch(/줄어드는 속도|바닥|고갈/);
+      expect(ev.facts.length).toBeGreaterThan(0);
+    }
+  });
+
+  it('L1b 적자·현금 부족이면 생존·비용 구조 과제로 바뀐다', () => {
+    const g = at('e14-growth-vs-profit', { cash: 400, cashHist: [900, 700, 550, 400], monthlyRevenue: 100 });
+    expect(resolveEvent(g)!.situation).not.toEqual(resolveEvent(at('e14-growth-vs-profit', { cash: 9000, cashHist: [6000, 7000, 8000, 9000], monthlyRevenue: 9000 }))!.situation);
+  });
+
+  it('L2 가동률이 낮으면 업무 포화라고 설명하지 않는다', () => {
+    const g = at('e07-hiring', { cash: 3000, headcount: 3 });
+    expect(utilization(g.sim)).toBeLessThan(0.5);
+    expect(text(resolveEvent(g)!)).not.toMatch(/한계에 가까|업무가 한계|포화/);
+  });
+
+  it('L3 인원이 줄고 채용이 없으면 보고서에 인력 확대 의존이 나오지 않는다', () => {
+    const g0 = play({ capital: 3000, mode: 'full' }, (ev) => {
+      const o = ev.options.filter((x) => x.available && !/채용/.test(x.label));
+      return (o[0] ?? ev.options[0]).id;
+    });
+    const g = { ...g0, history: g0.history.map((h, i) => (i === 0 ? { ...h, headcount: 3 } : { ...h, headcount: 2 })) };
+    const r = generateReport(g);
+    const all = [...r.insights, ...r.choiceInsights].map((i) => i.title + i.text).join('\n') + r.summary.join('');
+    expect(all).not.toMatch(/인력 확대에 의존/);
+  });
+
+  it('L4 현금이 음수인 상태를 고갈 이전이라고 쓰지 않는다', () => {
+    const g0 = play({ capital: 3000, mode: 'full' }, cheapest);
+    const g = { ...g0, sim: { ...g0.sim, cash: -78 }, history: g0.history.map((h, i, a) => (i === a.length - 1 ? { ...h, cash: -78 } : h)) };
+    const r = generateReport(g);
+    const all = [...r.insights, ...r.choiceInsights, ...r.turningPoints.map((t) => ({ title: '', text: t.note }))].map((i) => i.title + i.text).join('\n');
+    expect(all).not.toMatch(/바닥나기 전에|고갈되기 전에|고갈 이전/);
+  });
+
+  it('L5 수수료 모델의 지불자·과금 기준이 가격 이벤트와 일치한다', () => {
+    const s = revenueStructure('platform', 'b2c', 'commission');
+    expect(s.formula).toMatch(/거래.*평균 거래액.*수수료율/);
+    expect(s.payer).toMatch(/공급자/);
+    const ev = resolveEvent(at('e13-model-shift'))!;
+    const t = text(ev);
+    expect(t).not.toMatch(/\{(payer|billing|promo)\}/);
+    expect(t).not.toMatch(/무료 체험|프리미엄 요금제/);
+    // 수수료가 아닌 구독 모델에서는 구독 문구가 그대로 남는다
+    const sub = resolveEvent(at('e13-model-shift', {}, { businessType: 'saas', revenueModel: 'subscription' }))!;
+    expect(sub.options.length).toBeGreaterThan(0);
+  });
+
+  it('L6 현금 변화 분해 합계가 실제 현금 변화와 같다', () => {
+    const g = play({ ...REPRO, mode: 'full' }, firstAvailable);
+    for (const d of g.decisions) {
+      const cf = d.cashFlow;
+      if (!cf) continue;
+      expect(Math.round(cf.oneTime + cf.inflow + cf.operating + cf.other)).toBe(cf.total);
+      expect(Math.abs(cf.total - (d.afterPeriod.cash - d.before.cash))).toBeLessThanOrEqual(1);
+    }
+  });
+
+  it('L7 무급여 전환은 기간을 기록하고 급여 복원 결정이 따라붙는다', () => {
+    let g = at('e01-market-need', { cash: 300 });
+    g = { ...g, phase: 'outcome', plan: ['e01-market-need', 'e02-runway'] };
+    g = continueFromOutcome(g);
+    expect(g.plan[g.planIndex]).toBe(EMERGENCY_EVENT_ID);
+    const r = submitDecision(g, 'unpaid-founders', '당분간 급여 없이 버티기로 팀이 합의했다 확인');
+    if (!r.ok) throw new Error(r.error);
+    const sim = r.game.sim;
+    expect(sim.salaryCut).toBeDefined();
+    // 6개월 뒤: 삭감 기간이 늘고, 회사 현금에서 개인 생활비가 빠지지 않는다
+    let s = { ...sim, cash: 100000 };
+    for (let i = 0; i < 7; i++) s = advanceMonth(s).state;
+    expect(s.salaryCut!.months).toBeGreaterThanOrEqual(6);
+    expect(s.salaryCut!.burden).toBeGreaterThan(0);
+    const mid = { ...r.game, sim: s, phase: 'outcome' as const, plan: ['e01-market-need', 'e02-runway', 'e03-cofounder'], planIndex: 0 };
+    const next = continueFromOutcome(mid);
+    expect(next.plan[next.planIndex]).toBe(SALARY_EVENT_ID);
+    expect(resolveEvent(next)!.followup).toBe(true);
+    expect(resolveEvent(next)!.total).toBe(resolveEvent({ ...next, plan: next.plan.filter((x) => x !== SALARY_EVENT_ID), planIndex: 0 })?.total ?? resolveEvent(next)!.total);
+  });
+
+  it('L8 수업용 모드와 전체 이벤트 모드가 모두 최종 보고서까지 끝난다', () => {
+    for (const mode of ['class', 'full'] as const) {
+      const g = play({ ...REPRO, mode }, firstAvailable);
+      expect(['completed', 'bankrupt']).toContain(g.status);
+      const r = generateReport(g);
+      expect(r.score.total).toBeGreaterThanOrEqual(0);
+      const md = reportToMarkdown(g, r);
+      expect(md).toContain('제시된 선택지');
+      expect(md).toContain('현금 변화 분해');
+      expect(md).toContain('학습·의사결정 기록');
+    }
+  });
+
+  it('L9 근거 글자 수 검증과 인력·현금 선택 제한이 유지된다', () => {
+    const g = at('e07-hiring', { cash: 50, headcount: 3 });
+    const ev = resolveEvent(g)!;
+    const blocked = ev.options.find((o) => !o.available);
+    expect(blocked).toBeDefined();
+    const bad = submitDecision(g, blocked!.id, '충분히 긴 근거 문장이지만 제한된 선택지입니다 확인');
+    expect(bad.ok).toBe(false);
+    const ok = ev.options.find((o) => o.available)!;
+    expect(submitDecision(g, ok.id, '짧음').ok).toBe(false);
+  });
+
+  it('L10 조사가 맞게 붙고 긴 대상 고객은 줄여 쓴다', () => {
+    expect(fillText('{company}이 시작했다', { company: '네일핏 AI' } as never)).toMatch(/네일핏 AI가|네일핏 AI이/);
+    expect(fillText('{company}이 시작했다', { company: '네일핏 AI' } as never)).not.toContain('AI이');
+    expect(shortTarget('네일숍을 처음 찾는 20~30대 여성 이용자와 기존 단골 고객 전체', 16).length).toBeLessThanOrEqual(17);
+  });
+
+  it('L11 성장 점수는 초기 자본이 작아도 부풀지 않고 이전 산식 값을 함께 보여 준다', () => {
+    const g = play({ ...REPRO, mode: 'full' }, firstAvailable);
+    const sc = scoreGame(g);
+    expect(sc.legacy.growth).toBeGreaterThanOrEqual(0);
+    expect(sc.parts.growth).toBeLessThanOrEqual(100);
+  });
+
+  it('L12 연차 요약은 현금·월 이익·고정비·위험·검증 과제를 담는다', () => {
+    const g = play({ ...REPRO, mode: 'full' }, firstAvailable);
+    const y = yearSummary(g);
+    const labels = y.rows.map((r) => r.label).join();
+    for (const w of ['현금', '월 이익', '월 고정비']) expect(labels).toContain(w);
+    expect(Array.isArray(y.risks)).toBe(true);
+    expect(Array.isArray(y.checks)).toBe(true);
   });
 });

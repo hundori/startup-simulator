@@ -1,5 +1,5 @@
 import type { GameEvent } from '../types';
-import { gte, lt, lte } from './helpers';
+import { CRUNCH, DEFICIT, SURPLUS, gte, lt, lte } from './helpers';
 
 // 1년 차 — 생존. 효과 수치는 교육용 가정이다.
 export const STAGE1_EVENTS: GameEvent[] = [
@@ -11,7 +11,7 @@ export const STAGE1_EVENTS: GameEvent[] = [
     reason: 'no-market-need',
     weight: 3,
     situation:
-      '{company}의 첫 버전("{idea}")이 나온 지 석 달이 지났습니다. {target} 20명과 한 인터뷰에서 "아이디어는 좋다"는 반응은 많았지만, 실제로 돈을 내겠다는 사람은 3명뿐입니다. 팀 안에서는 "기능이 부족해서 그렇다"는 의견과 "애초에 해결하려는 문제가 약한 게 아니냐"는 의견이 갈립니다.',
+      '{company}의 첫 버전("{idea}")을 내놓고 {target} 20명과 인터뷰를 했습니다. 인터뷰에서 "아이디어는 좋다"는 반응은 많았지만, 실제로 돈을 내겠다는 사람은 3명뿐입니다. 팀 안에서는 "기능이 부족해서 그렇다"는 의견과 "애초에 해결하려는 문제가 약한 게 아니냐"는 의견이 갈립니다.',
     contextByType: {
       saas: '무료 체험 가입자의 70%가 첫 주 이후 다시 로그인하지 않았습니다.',
       commerce: '첫 구매 후 재구매한 고객이 거의 없고, 후기에는 "예쁘지만 꼭 필요하진 않다"는 말이 많습니다.',
@@ -93,13 +93,36 @@ export const STAGE1_EVENTS: GameEvent[] = [
     title: '런웨이 경고: 투자냐 비용 절감이냐',
     reason: 'ran-out-of-cash',
     weight: 2,
-    boosts: [{ when: [lte('runway', 8)], add: 3 }],
+    boosts: [{ when: [lte('runway', 8)], add: 3 }, { when: SURPLUS, add: -1 }],
     situation:
       '지금 속도로 쓰면 {company}의 현금은 몇 달 안에 바닥납니다. 투자자 두세 곳이 "{target} 시장이 정말 큰가"를 묻고 "지표를 더 보고 싶다"고 말합니다. 비용을 줄이자니 성장이 멈출 것 같습니다.',
     discussionPrompts: [
       '우리가 투자를 받아야 하는 이유는 "성장"인가 "생존"인가?',
       '비용 절감은 어느 선부터 "살을 깎는" 수준인가?',
       '돈을 받는 대가(지분·이자·시간)를 팀이 감당할 수 있는가?',
+    ],
+    variants: [
+      {
+        when: SURPLUS,
+        title: '자금 조달 판단: 지금 투자를 받을 것인가',
+        situation:
+          '{company}는 지금 월 {profit}의 이익을 내고 현금도 {cash} 있습니다. 급하게 돈이 필요한 상황은 아닙니다. 그런데 투자자 두세 곳이 "{target} 시장이 정말 큰가"를 묻고 "지표를 더 보고 싶다"며 접촉해 왔습니다. 지금 외부 자금을 받아 성장 속도를 높일지, 현금흐름 안에서 키울지 정해야 합니다.',
+        discussionPrompts: [
+          '우리가 투자를 받는다면 이유는 "성장 가속"인가, "불안 해소"인가?',
+          '이익이 나는 지금 지분을 내주는 대가는 정당한가?',
+          '받은 돈을 어디에 쓰면 이익이 그 이상으로 커지는가?',
+        ],
+      },
+      {
+        when: DEFICIT,
+        situation:
+          '{company}는 매달 {loss}씩 적자가 나고 있지만 현금 {cash}이 아직 남아 있습니다. 지금 속도라면 약 {runway}개월을 버틸 수 있습니다. 투자자 두세 곳이 "{target} 시장이 정말 큰가"를 묻고 "지표를 더 보고 싶다"고 말합니다. 비용을 줄이자니 성장이 멈출 것 같습니다.',
+      },
+      {
+        when: CRUNCH,
+        situation:
+          '{company}의 현금 {cash}은 매달 {loss}의 적자로 약 {runway}개월 안에 바닥납니다. 투자자 두세 곳이 "{target} 시장이 정말 큰가"를 묻고 "지표를 더 보고 싶다"고 말합니다. 비용을 줄이자니 성장이 멈출 것 같습니다.',
+      },
     ],
     options: [
       {
@@ -268,7 +291,7 @@ export const STAGE1_EVENTS: GameEvent[] = [
     weight: 0,
     isFallback: true,
     situation:
-      '{company:은/는} 사실상 대표 한 명이 개발, 영업, 고객 응대를 모두 맡고 있습니다. 최근 석 달 동안 쉰 날이 거의 없고, 작은 실수가 반복되며 고객 불만이 늘고 있습니다.',
+      '{company:은/는} 사실상 대표 한 명이 개발, 영업, 고객 응대를 모두 맡고 있습니다. 최근 쉰 날이 거의 없고, 작은 실수가 반복되며 고객 불만이 늘고 있습니다.',
     discussionPrompts: [
       '대표가 하는 일 중 "대표만 할 수 있는 일"은 무엇인가?',
       '첫 채용·외주·자동화 중 무엇이 가장 싸게 병목을 푸는가?',
@@ -535,11 +558,18 @@ export const STAGE1_EVENTS: GameEvent[] = [
     reason: 'bad-pivot',
     weight: 2,
     situation:
-      '{company}의 핵심 가설("{idea}")을 시험한 지 몇 달이 지났습니다. {target} 중 돈을 내는 사람은 기대보다 적고 성장도 더딥니다. 팀 안에서는 "조금만 더 해 보자", "방향을 바꾸자", "더 잃기 전에 접자"는 의견이 갈립니다.',
+      '{company}의 핵심 가설("{idea}")을 시험해 본 결과가 나왔습니다. {target} 중 돈을 내는 사람은 기대보다 적고 성장도 더딥니다. 팀 안에서는 "조금만 더 해 보자", "방향을 바꾸자", "더 잃기 전에 접자"는 의견이 갈립니다.',
     discussionPrompts: [
       '우리가 틀렸다는 증거와 아직 모른다는 증거를 나눠 적어 보면 각각 무엇인가?',
       '6개월을 더 쓰면 무엇을 알게 되고, 그 정보에 그만한 값어치가 있는가?',
       '접거나 방향을 바꾸는 것이 실패인가, 아니면 남은 자원을 지키는 결정인가?',
+    ],
+    variants: [
+      {
+        when: SURPLUS,
+        situation:
+          '{company}의 핵심 가설("{idea}")을 시험해 본 결과가 나왔습니다. 월 이익 {profit}으로 현금은 유지되고 있지만, {target} 고객 증가가 더디고 시장의 신호가 약합니다. 팀 안에서는 "지금 모델로 안정적으로 운영하자", "새 방향을 시험하자", "이익이 나는 지금 정리하자"는 의견이 갈립니다.',
+      },
     ],
     options: [
       {
@@ -605,6 +635,12 @@ export const STAGE1_EVENTS: GameEvent[] = [
         description: '인력과 마케팅을 줄이고 현금을 지킨 채 가장 작은 단위로 다시 시험한다. 일찍 멈추는 대신 속도는 포기한다.',
         cost: 0,
         outcomes: [
+          {
+            when: [lte('cash', 0)],
+            effects: { cash: 200, headcount: -1, marketingBudget: -60, overhead: -40, customersPct: -0.15, morale: -4, flags: ['stop-loss'] },
+            text: '현금이 이미 마이너스였던 상태에서 사업을 줄였습니다. 손실은 줄었지만 현금이 바닥난 뒤에 내린 결정이라 늦었고, 마이너스를 메우는 일이 먼저 필요합니다.',
+            verdict: 'weak',
+          },
           {
             when: [lte('runway', 8)],
             effects: { cash: 300, headcount: -1, marketingBudget: -60, overhead: -40, customersPct: -0.1, morale: -2, reputation: 1, flags: ['stop-loss'] },
