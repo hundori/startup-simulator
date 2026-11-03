@@ -10,6 +10,7 @@ export * from './whatif';
 export * from './scoring';
 export * from './report';
 export * from './studentReport';
+export * from './resultReport';
 export * from './rng';
 export { ALL_EVENTS, EMERGENCY_EVENT_ID, SALARY_EVENT_ID, EVENT_MAP, getEvent, stageCandidates } from './events';
 export * from './josa';

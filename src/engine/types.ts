@@ -290,6 +290,11 @@ export interface DecisionTrace {
     monthly: MonthCash[];
     totals: Omit<MonthCash, 'month'>;
     netCash: number; // 이후 운영기간 순현금 변화(영업 현금흐름 합)
+    /**
+     * 같은 기간을 "시장 경쟁 압력(이탈 증가·유입 감소 가정)이 없다고 보고" 다시 계산한 값과의 차이.
+     * 값이 음수면 시장 압력 때문에 그만큼 적었다는 뜻이다(엔진 계산 비교이며 선택의 인과효과가 아니다). 옛 기록에는 없다.
+     */
+    market?: { customers: number; cash: number; monthlyProfit: number; withoutMarketCustomers: number };
   };
   rules: DecisionRules;
   /** 이 선택 직전의 전체 상태. "다른 선택이었다면?" 비교를 같은 조건에서 다시 계산하는 데 쓴다. */
@@ -380,6 +385,17 @@ export interface Game {
   lastOutcome?: DecisionRecord;
   /** 선택 직후 피드백 단계(phase='feedback')에서만 있다. 기간 결과가 아직 계산되지 않은 결정. */
   pending?: PendingDecision;
+  /** 파산한 게임에만 있다. 엔진이 파산을 판정한 시점의 값(보고서에서 역산하지 않는다). 옛 기록에는 없다. */
+  bankruptcy?: BankruptcyRecord;
+}
+
+export interface BankruptcyRecord {
+  month: number; // 파산이 판정된 달(월말 정산 기준)
+  cash: number; // 그 달 말 현금 잔액(0 이하)
+  cashBefore: number; // 직전 달 말 현금(선택 직후 시작 현금)
+  monthlyNet: number; // 그 달의 영업 현금흐름
+  decisionIndex: number; // 파산이 일어난 기간의 결정(game.decisions 인덱스)
+  rule: 'cash-at-or-below-zero-v2';
 }
 
 export interface Score {

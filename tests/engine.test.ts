@@ -6,6 +6,7 @@ import {
   REVENUE_MODELS,
   acquisitionRate,
   advanceMonth,
+  BANKRUPTCY_RULE,
   applyEffects,
   beginSimulation,
   continueFromOutcome,
@@ -142,24 +143,29 @@ describe('C. 현금 음수·파산', () => {
   const broke = () =>
     baseSim({ cash: 100, customers: 0, acqBase: 0, headcount: 1, avgSalary: 250, overhead: 100, marketingBudget: 0, initialCapital: 10000 });
 
-  it('C1 월말 현금이 음수면 연속 개월이 1이 된다', () => {
+  it('C1 월말 현금이 음수가 되면 그 달에 바로 파산한다(유예 없음)', () => {
     const r = advanceMonth(broke());
     expect(r.state.cash).toBeLessThan(0);
-    expect(r.state.insolvencyMonths).toBe(1);
-    expect(r.bankrupt).toBe(false);
-  });
-  it('C2 2개월 연속 음수면 파산한다', () => {
-    const r = advanceMonth(advanceMonth(broke()).state);
-    expect(r.state.insolvencyMonths).toBe(2);
     expect(r.bankrupt).toBe(true);
   });
-  it('C3 다시 흑자가 되면 카운터가 초기화된다', () => {
-    const s = baseSim({ cash: 1000, insolvencyMonths: 1, customers: 2000, arpu: 5, acqBase: 0, churnRate: 0.01 });
-    expect(advanceMonth(s).state.insolvencyMonths).toBe(0);
+  it('C2 월말 현금이 정확히 0원이어도 파산한다', () => {
+    const base = broke();
+    const net = advanceMonth({ ...base, cash: 0 }).profit; // 이번 달 영업 현금흐름
+    const r = advanceMonth({ ...base, cash: -net });
+    expect(r.state.cash).toBe(0);
+    expect(r.bankrupt).toBe(true);
   });
-  it('C4 압류선(자본의 50%)을 넘으면 즉시 파산한다', () => {
-    const s = { ...broke(), cash: -4900 };
-    expect(advanceMonth(s).bankrupt).toBe(true);
+  it('C3 월말 현금이 1만원이라도 남으면 파산하지 않는다', () => {
+    const base = broke();
+    const net = advanceMonth({ ...base, cash: 0 }).profit;
+    const r = advanceMonth({ ...base, cash: -net + 1 });
+    expect(r.state.cash).toBe(1);
+    expect(r.bankrupt).toBe(false);
+  });
+  it('C4 이전 규칙의 유예(2개월 연속)와 압류선은 더 이상 쓰지 않는다', () => {
+    const s = { ...broke(), cash: 100, insolvencyMonths: 0 };
+    expect(advanceMonth(s).bankrupt).toBe(true); // 첫 음수 달에 종료
+    expect(BANKRUPTCY_RULE.grace).toContain('유예 없음');
   });
   it('C5 현금이 음수일 때 비용이 드는 대안은 선택할 수 없다', () => {
     const opt = getEvent('e01-market-need').options.find((o) => o.id === 'interview')!;

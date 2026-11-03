@@ -13,19 +13,19 @@ export const LEGACY_NOTICE = '이전 기록에는 선택 직후 수치가 없어
 export const HEDGE_NOTICE = '이후 기간의 변화에는 시장 경쟁·이미 늘어난 고정비 등 다른 요인도 섞여 있어, 이 선택만의 효과라고 단정할 수 없습니다.';
 
 // ---------- 표기 도우미 ----------
-const sgMoney = (v: number): string => (v === 0 ? '0만원' : `${v > 0 ? '+' : '−'}${formatMoney(Math.abs(v))}`);
-const sgNum = (v: number, unit: string): string => (v === 0 ? `0${unit}` : `${v > 0 ? '+' : '−'}${Math.abs(Math.round(v)).toLocaleString('ko-KR')}${unit}`);
-const money = (v: number): string => formatMoney(v).replace('-', '−');
-const when = (m: number): string => (m === 0 ? '창업 직후' : monthToLabel(m).replace(/ 시점$/, ''));
-const FIN_WORD = { crunch: '현금 위기', deficit: '적자', surplus: '흑자' } as const;
+export const sgMoney = (v: number): string => (v === 0 ? '0만원' : `${v > 0 ? '+' : '−'}${formatMoney(Math.abs(v))}`);
+export const sgNum = (v: number, unit: string): string => (v === 0 ? `0${unit}` : `${v > 0 ? '+' : '−'}${Math.abs(Math.round(v)).toLocaleString('ko-KR')}${unit}`);
+export const money = (v: number): string => formatMoney(v).replace('-', '−');
+export const when = (m: number): string => (m === 0 ? '창업 직후' : monthToLabel(m).replace(/ 시점$/, ''));
+export const FIN_WORD = { crunch: '현금 위기', deficit: '적자', surplus: '흑자' } as const;
 
-function runwayWord(r: number | null): string {
+export function runwayWord(r: number | null): string {
   if (r === null) return '흑자 구조';
   if (r >= 60) return '5년 이상';
   return r < 1 ? '1개월 미만' : `약 ${r.toFixed(1)}개월`;
 }
 
-function finOf(d: DecisionRecord): 'crunch' | 'deficit' | 'surplus' | null {
+export function finOf(d: DecisionRecord): 'crunch' | 'deficit' | 'surplus' | null {
   if (d.finStatusBefore) return d.finStatusBefore;
   const t = d.trace?.before;
   if (!t) return null;
@@ -60,10 +60,12 @@ export function finalResult(game: Game): FinalResult {
   const negMonths = history.filter((h) => h.month > 0 && h.cash < 0).length;
 
   const head = bankrupt
-    ? `${when(sim.month)}에 파산했습니다. ${profit >= 0 ? '마지막 시점 계산으로는 월 이익이 났지만 현금을 지키지 못했습니다.' : '마지막 시점에도 월 손실이 이어지고 있었습니다.'}`
+    ? `${when(sim.month)}에 월말 현금이 0원 이하가 되어 파산했습니다. ${profit >= 0 ? '마지막 시점 계산으로는 월 이익이 났지만 현금을 지키지 못했습니다.' : '마지막 시점에도 월 손실이 이어지고 있었습니다.'}`
     : `3년을 버텼고, ${profit >= 0 ? '마지막 시점 기준으로 월 이익을 냈습니다.' : '마지막 시점 기준으로는 월 손실이 이어지고 있습니다.'}`;
   const dips: string[] = [];
-  if (negMonths > 0) dips.push(`중간에 현금이 마이너스였던 달이 ${negMonths}개월 있었습니다.`);
+  if (bankrupt) {
+    /* 파산한 게임은 현금 0원 이하가 곧 종료 사유이므로 별도 설명을 붙이지 않는다 */
+  } else if (negMonths > 0) dips.push(`중간에 현금이 마이너스였던 달이 ${negMonths}개월 있었습니다.`);
   else if (lowest.month > 0 && lowest.month < sim.month && lowest.cash < start.cash * 0.3 && lowest.cash < sim.cash)
     dips.push(`${when(lowest.month)}에는 현금이 ${money(lowest.cash)}까지 줄었습니다.`);
   if (profit >= 0 && normal < 0 && isSalaryCut(sim)) dips.push('급여를 삭감한 상태라 정상 급여로 계산하면 월 손실입니다.');
@@ -108,6 +110,20 @@ export interface MetricRow {
   note?: string;
 }
 
+export interface EffectRow {
+  label: string;
+  direct: string; // 선택 직후 변화(선택이 직접 바꾼 값)
+  time: string | null; // 시간이 흐르며 생긴 변화(시장 요인 제외). 옛 기록은 null
+  market: string | null; // 시장 경쟁 압력 요인. 옛 기록은 null
+  total: string;
+}
+
+export interface EffectSplit {
+  rows: EffectRow[];
+  months: number;
+  note: string;
+}
+
 export interface DecisionCard {
   index: number; // game.decisions 인덱스
   anchor: string;
@@ -125,17 +141,11 @@ export interface DecisionCard {
   gradeNote: string; // 판정 문구 + 이유
   notices: string[];
   months: number;
+  scenario: string; // 시나리오 서술(교육용 설명). 계산으로 검증된 원인이 아니다
+  effects: EffectSplit | null; // 선택 직후 / 시간 경과 / 시장 요인으로 나눈 변화
 }
 
 type Cat = 'cash-relief' | 'customer' | 'customer-period' | 'quality' | 'quality-period' | 'recurring-cost';
-const CAT_TITLE: Record<Cat, string> = {
-  'cash-relief': '현금 부담을 줄인 결정',
-  customer: '고객 확보에 도움이 된 결정',
-  'customer-period': '이후 고객이 늘어난 시기의 결정',
-  quality: '품질과 신뢰를 높인 결정',
-  'quality-period': '이후 품질·평판이 올라간 시기의 결정',
-  'recurring-cost': '반복 비용을 늘린 결정',
-};
 
 const VERDICT_WORD: Record<Verdict, string> = { strong: '좋음', ok: '보통', weak: '아쉬움' };
 
@@ -243,10 +253,37 @@ function pickRows(d: DecisionRecord, kind: Cat | 'other'): MetricRow[] {
   return [cash, profit, cust];
 }
 
-function buildCard(game: Game, index: number, kind: Cat | 'other', title: string, tier: EvidenceTier | 'legacy'): DecisionCard {
+function effectSplit(d: DecisionRecord): EffectSplit | null {
+  const t = d.trace;
+  if (!t || t.period.months === 0) return null;
+  const m = t.period.market;
+  const cust = (v: number) => sgNum(v, '명');
+  const row = (label: string, dir: number, per: number, mk: number | undefined, f: (v: number) => string): EffectRow => ({
+    label,
+    direct: f(dir),
+    time: mk === undefined ? null : f(per - mk),
+    market: mk === undefined ? null : f(mk),
+    total: f(dir + per),
+  });
+  const rows = [
+    row('고객 수', t.afterDirect.customers - t.before.customers, t.afterPeriod.customers - t.afterDirect.customers, m?.customers, cust),
+    row('현금', t.afterDirect.cash - t.before.cash, t.afterPeriod.cash - t.afterDirect.cash, m?.cash, sgMoney),
+  ];
+  return {
+    rows,
+    months: t.period.months,
+    note: m
+      ? '“시장 요인”은 같은 기간을 시장 경쟁 압력(이탈 증가·신규 유입 감소 가정)이 없다고 보고 다시 계산한 값과의 차이입니다. “시간 경과”는 나머지(고객 응대 여력, 품질 변화, 이미 늘어난 고정비 등)이며, 선택만의 효과가 아닙니다. 선택과 시장이 서로 영향을 주므로 이 구분은 계산상 구분이지 인과관계가 검증된 것은 아닙니다.'
+      : '이전 기록이라 시간 경과와 시장 요인을 나눌 수 없습니다. 이후 변화에는 시장 경쟁 등 다른 요인이 섞여 있습니다.',
+  };
+}
+
+export function buildCard(game: Game, index: number, kind: Cat | 'other', title: string, tier: EvidenceTier | 'legacy'): DecisionCard {
   const d = game.decisions[index];
   const t = d.trace;
-  const facts = factsOf(d);
+  const allFacts = factsOf(d);
+  // 얻은 것·치른 대가는 선택이 직접 바꾼 값만 쓴다(이후 기간 변화는 선택만의 효과로 단정할 수 없다).
+  const facts = t ? allFacts.filter((f) => f.tier === 'direct') : allFacts;
   const good = facts.filter((f) => f.good).sort((a, b) => b.mag - a.mag).slice(0, 2).map((f) => f.text);
   const bad = facts.filter((f) => !f.good).sort((a, b) => b.mag - a.mag).slice(0, 2).map((f) => f.text);
 
@@ -259,13 +296,10 @@ function buildCard(game: Game, index: number, kind: Cat | 'other', title: string
   const months = t ? t.period.months : d.monthsElapsed;
   if (t && months > 0) {
     periodLines.push(`이후 ${months}개월 영업 현금흐름 ${sgMoney(t.period.netCash)}(매출−원가−인건비−운영비−마케팅−이자)`);
-    periodLines.push(d.outcomeText);
-  } else if (!t) {
-    periodLines.push(d.outcomeText);
   }
   const notices: string[] = [];
   if (!t) notices.push(LEGACY_NOTICE);
-  else if (good.length + bad.length > 0 && facts.some((f) => f.tier === 'period')) notices.push(HEDGE_NOTICE);
+  else if (t.period.months > 0) notices.push(HEDGE_NOTICE);
 
   return {
     index,
@@ -284,85 +318,12 @@ function buildCard(game: Game, index: number, kind: Cat | 'other', title: string
     gradeNote: gradeNote(d),
     notices,
     months,
+    scenario: d.outcomeText,
+    effects: effectSplit(d),
   };
 }
 
-// ---------- C. 다시 고민할 결정 ----------
-export interface Reconsider {
-  card: DecisionCard;
-  reasons: string[];
-  question: string;
-  forced: boolean; // 뚜렷한 후보가 없어 "대가를 논의할 만한 결정"을 골랐는가
-}
-
-interface RcCand {
-  index: number;
-  reasons: string[];
-  score: number;
-}
-
-function reconsiderCandidates(game: Game): RcCand[] {
-  const out: RcCand[] = [];
-  game.decisions.forEach((d, index) => {
-    const t = d.trace;
-    const reasons: string[] = [];
-    let score = 0;
-    let severity = 0;
-    if (t) {
-      const fb = Math.max(1, t.before.fixedCost);
-      const fin = finOf(d);
-      // (a) 현금 여유가 부족한데 반복 비용을 늘렸는가
-      const tight = t.before.cash <= 0 || (t.before.runway !== null && t.before.runway < 9);
-      if (fin && tight && t.direct.fixedDelta >= Math.max(1, fb * 0.03)) {
-        reasons.push(`현금 여유가 얇은 때(${FIN_WORD[fin]}, 런웨이 ${runwayWord(t.before.runway)} — 기준: 9개월 미만)에 월 고정비를 ${sgMoney(t.direct.fixedDelta)} 늘렸습니다.`);
-        score += 1;
-        severity += t.direct.fixedDelta / fb;
-      }
-      // (b) 직접 효과와 이후 결과가 반대 방향이었는가(선택 직후 개선 → 이후 악화)
-      const dir = diff(t.before, t.afterDirect);
-      const per = diff(t.afterDirect, t.afterPeriod);
-      const gaps: { text: string; size: number }[] = [];
-      if (dir.customers >= 2 && per.customers <= -Math.max(2, t.afterDirect.customers * 0.05))
-        gaps.push({ text: `선택 직후 고객이 ${sgNum(dir.customers, '명')} 늘었지만, 이후 ${t.period.months}개월 동안 ${sgNum(per.customers, '명')} 줄었습니다.`, size: -per.customers / Math.max(10, t.afterDirect.customers) });
-      if (dir.profit > 0 && per.profit <= -Math.max(1, fb * 0.05))
-        gaps.push({ text: `선택 직후 월 이익이 ${sgMoney(dir.profit)} 좋아졌지만, 이후 ${t.period.months}개월 동안 ${sgMoney(per.profit)} 나빠졌습니다.`, size: -per.profit / fb });
-      if (dir.quality + dir.reputation >= 3 && per.quality + per.reputation <= -4)
-        gaps.push({ text: `선택 직후 품질·평판이 ${sgNum(dir.quality + dir.reputation, '점')}(합) 올랐지만, 이후 ${sgNum(per.quality + per.reputation, '점')}(합) 내려갔습니다.`, size: -(per.quality + per.reputation) / 20 });
-      if (gaps.length) {
-        const g = gaps.sort((x, y) => y.size - x.size)[0];
-        reasons.push(g.text);
-        score += 1;
-        severity += g.size;
-      }
-      // (c) 중요한 대가나 위험이 발생했는가
-      const risk: string[] = [];
-      if (t.afterPeriod.cash < 0) risk.push(`이후 기간 끝에 현금이 ${money(t.afterPeriod.cash)}로 마이너스였습니다`);
-      if (t.afterPeriod.headcount < t.afterDirect.headcount) risk.push(`인원이 ${t.afterDirect.headcount}명에서 ${t.afterPeriod.headcount}명으로 줄었습니다`);
-      if (per.morale <= -8) risk.push(`팀 사기가 ${sgNum(per.morale, '점')} 떨어졌습니다`);
-      if (d.notes.length > 0 && risk.length === 0) risk.push(`운영 알림이 있었습니다(${d.notes[0].replace(/\.$/, '')})`);
-      if (risk.length) {
-        reasons.push(`이후 ${t.period.months}개월 동안 ${risk.slice(0, 2).join(', ')}.`);
-        score += 1;
-        severity += 0.5;
-      }
-    } else {
-      // 옛 기록: 기간 종료 스냅샷에서 확인되는 대가만 본다
-      const risk: string[] = [];
-      if (d.afterPeriod.cash < 0) risk.push(`기간 끝에 현금이 ${money(d.afterPeriod.cash)}로 마이너스였습니다`);
-      if (d.afterPeriod.headcount < d.afterImmediate.headcount) risk.push('기간 중 인원이 줄었습니다');
-      if (d.afterPeriod.morale - d.afterImmediate.morale <= -8) risk.push('기간 중 팀 사기가 크게 떨어졌습니다');
-      if (risk.length) {
-        reasons.push(`${risk.slice(0, 2).join(', ')}.`);
-        score += 1;
-        severity += 0.5;
-      }
-    }
-    if (reasons.length) out.push({ index, reasons, score: score + Math.min(0.99, severity / 10) });
-  });
-  return out.sort((a, b) => b.score - a.score || a.index - b.index);
-}
-
-function reconsiderQuestion(d: DecisionRecord): string {
+export function reconsiderQuestion(d: DecisionRecord): string {
   const t = d.trace;
   if (t && t.direct.fixedDelta > 0)
     return `${withJosa(`‘${d.optionLabel}’`, '으로/로')} 매달 늘어난 비용 ${withJosa(formatMoney(t.direct.fixedDelta), '을/를')} 이후 매출이 따라잡았나요? 같은 효과를 한 번만 쓰는 비용으로 얻을 방법은 없었을까요?`;
@@ -384,72 +345,7 @@ export interface YearRow {
   customerNote: string | null;
 }
 
-export interface StudentReport {
-  result: FinalResult;
-  key: DecisionCard[];
-  keyEmptyNote: string | null;
-  reconsider: Reconsider | null;
-  reconsiderEmptyNote: string | null;
-  questions: string[];
-  years: YearRow[];
-  legacyCount: number;
-  totalDecisions: number;
-}
-
-interface KeyCand {
-  index: number;
-  cat: Cat;
-  tier: EvidenceTier;
-  score: number;
-}
-
-function keyCandidates(game: Game): KeyCand[] {
-  const out: KeyCand[] = [];
-  game.decisions.forEach((d, index) => {
-    const t = d.trace;
-    if (!t) {
-      // 옛 기록: 기간 전체 변화만 알 수 있으므로 시기 표현의 제목만 쓴다
-      const dc = d.afterPeriod.customers - d.before.customers;
-      if (dc >= Math.max(3, d.before.customers * 0.1)) out.push({ index, cat: 'customer-period', tier: 'period', score: (dc / Math.max(10, d.before.customers)) * 0.6 });
-      const dq = d.afterPeriod.quality - d.before.quality + (d.afterPeriod.reputation - d.before.reputation);
-      if (dq >= 3) out.push({ index, cat: 'quality-period', tier: 'period', score: (dq / 40) * 0.6 });
-      return;
-    }
-    const fb = Math.max(1, t.before.fixedCost);
-    const dir = diff(t.before, t.afterDirect);
-    const per = diff(t.afterDirect, t.afterPeriod);
-    const thr = Math.max(1, fb * 0.03);
-    if (dir.fixed <= -thr) out.push({ index, cat: 'cash-relief', tier: 'direct', score: -dir.fixed / fb });
-    else if (t.direct.netCash >= Math.max(1, Math.abs(t.before.cash) * 0.25) && t.direct.inflow > 0) out.push({ index, cat: 'cash-relief', tier: 'direct', score: t.direct.netCash / (fb * 12) });
-    if (dir.fixed >= thr) out.push({ index, cat: 'recurring-cost', tier: 'direct', score: dir.fixed / fb });
-    const newDelta = t.afterDirect.newCustomers - t.before.newCustomers;
-    if (dir.customers >= Math.max(2, t.before.customers * 0.05) || newDelta >= Math.max(1, t.before.newCustomers * 0.1)) {
-      out.push({ index, cat: 'customer', tier: 'direct', score: Math.max(dir.customers / Math.max(10, t.before.customers), newDelta / Math.max(5, t.before.newCustomers)) });
-    } else if (per.customers >= Math.max(3, t.afterDirect.customers * 0.1)) {
-      out.push({ index, cat: 'customer-period', tier: 'period', score: (per.customers / Math.max(10, t.afterDirect.customers)) * 0.6 });
-    }
-    if (dir.quality + dir.reputation >= 4) out.push({ index, cat: 'quality', tier: 'direct', score: (dir.quality + dir.reputation) / 40 });
-    else if (per.quality + per.reputation >= 3) out.push({ index, cat: 'quality-period', tier: 'period', score: ((per.quality + per.reputation) / 40) * 0.6 });
-  });
-  return out.sort((a, b) => b.score - a.score || a.index - b.index);
-}
-
-/** 한 결정을 한 번만 쓰고, 같은 제목을 되도록 피해 최대 3개를 고른다. 시간 순으로 돌려준다. */
-function selectKey(cands: KeyCand[], excluded: Set<number>): KeyCand[] {
-  const chosen: KeyCand[] = [];
-  const usedIdx = new Set<number>(excluded);
-  const usedCat = new Set<Cat>();
-  for (const c of cands) {
-    if (chosen.length >= 3) break;
-    if (usedIdx.has(c.index) || usedCat.has(c.cat)) continue;
-    chosen.push(c);
-    usedIdx.add(c.index);
-    usedCat.add(c.cat);
-  }
-  return chosen.sort((a, b) => a.index - b.index);
-}
-
-function yearRows(game: Game): YearRow[] {
+export function yearRows(game: Game): YearRow[] {
   const rows: YearRow[] = [];
   const last = game.history[game.history.length - 1];
   let prevCustomers = game.history[0].customers;
@@ -476,65 +372,8 @@ function yearRows(game: Game): YearRow[] {
   return rows;
 }
 
-export function buildStudentReport(game: Game): StudentReport {
-  const result = finalResult(game);
-  const decisions = game.decisions;
-
-  // C를 먼저 고르고, B는 C와 같은 결정을 쓰지 않는다(같은 결정이 두 번 설명되지 않게).
-  const rc = reconsiderCandidates(game);
-  let reconsider: Reconsider | null = null;
-  let reconsiderEmptyNote: string | null = null;
-  if (rc.length > 0) {
-    const top = rc[0];
-    const d = decisions[top.index];
-    reconsider = { card: buildCard(game, top.index, 'other', '다시 검토해 볼 결정', d.trace ? 'direct' : 'legacy'), reasons: top.reasons, question: reconsiderQuestion(d), forced: false };
-  } else if (decisions.length > 0) {
-    // 뚜렷한 후보가 없으면 '잘못된 결정'을 만들지 않고, 대가를 가장 크게 치른 선택을 논의 대상으로 둔다.
-    const ranked = decisions
-      .map((d, index) => ({ d, index, price: (d.trace ? d.trace.direct.oneTimeCost + Math.max(0, d.trace.direct.fixedDelta) * d.trace.period.months : d.cost) / Math.max(1, Math.abs(d.before.cash)) }))
-      .filter((x) => x.price > 0)
-      .sort((a, b) => b.price - a.price || a.index - b.index);
-    if (ranked.length) {
-      const x = ranked[0];
-      const t = x.d.trace;
-      const price = t
-        ? `일회성 지출 ${t.direct.oneTimeCost > 0 ? formatMoney(t.direct.oneTimeCost) : '없음'}, 월 고정비 ${sgMoney(t.direct.fixedDelta)}`
-        : `일회성 비용 ${x.d.cost > 0 ? formatMoney(x.d.cost) : '없음'}`;
-      reconsider = {
-        card: buildCard(game, x.index, 'other', '대가를 논의해 볼 결정', t ? 'direct' : 'legacy'),
-        reasons: [`뚜렷하게 다시 검토를 권할 신호는 없었습니다. 다만 우리가 가장 큰 대가를 치른 선택이라 효과와 비교해 볼 만합니다(${price}).`],
-        question: reconsiderQuestion(x.d),
-        forced: true,
-      };
-    } else {
-      reconsiderEmptyNote = '이번 기록에서는 다시 검토를 권할 신호도, 눈에 띄는 대가를 치른 선택도 없었습니다.';
-    }
-  }
-
-  const cands = keyCandidates(game);
-  const exclude = new Set<number>(reconsider ? [reconsider.card.index] : []);
-  const picked = selectKey(cands, exclude);
-  const key = picked.map((c) => buildCard(game, c.index, c.cat, CAT_TITLE[c.cat], c.tier));
-  const keyEmptyNote = key.length === 0 ? '결과를 바꾼 결정으로 분류할 만큼 뚜렷한 변화가 기록되지 않았습니다. 아래 전체 결정 기록에서 각 선택을 확인해 보세요.' : null;
-
-  const used = [...key.map((k) => k.index), ...(reconsider ? [reconsider.card.index] : [])];
-  const questions = buildQuestions(game, key, reconsider, used);
-
-  return {
-    result,
-    key,
-    keyEmptyNote,
-    reconsider,
-    reconsiderEmptyNote,
-    questions,
-    years: yearRows(game),
-    legacyCount: decisions.filter((d) => !d.trace).length,
-    totalDecisions: decisions.length,
-  };
-}
-
 // ---------- D. 토론 질문 ----------
-function brief(d: DecisionRecord): string {
+export function brief(d: DecisionRecord): string {
   const t = d.trace;
   if (!t) return `기간 전체로 현금 ${sgMoney(d.afterPeriod.cash - d.before.cash)}, 고객 ${sgNum(d.afterPeriod.customers - d.before.customers, '명')}`;
   const parts: string[] = [];
@@ -545,38 +384,11 @@ function brief(d: DecisionRecord): string {
   return parts.join(', ');
 }
 
-function afterBrief(d: DecisionRecord): string {
+export function afterBrief(d: DecisionRecord): string {
   const t = d.trace;
   if (!t) return `고객 ${Math.round(d.before.customers)}명에서 ${Math.round(d.afterPeriod.customers)}명`;
   return `현금 ${money(t.afterDirect.cash)}에서 ${money(t.afterPeriod.cash)}, 고객 ${Math.round(t.afterDirect.customers)}명에서 ${Math.round(t.afterPeriod.customers)}명`;
 }
-
-function buildQuestions(game: Game, key: DecisionCard[], rc: Reconsider | null, used: number[]): string[] {
-  const ds = game.decisions;
-  const idxs = Array.from(new Set(used));
-  const qs: string[] = [];
-  if (idxs.length >= 2) {
-    // 서로 다른 두 결정의 효과와 대가를 비교한다
-    const a = ds[idxs[0]];
-    const b = ds[idxs[1]];
-    qs.push(
-      `${when(a.month)} ${withJosa(`‘${a.optionLabel}’(${brief(a)})`, '과/와')} ${when(b.month)} ‘${b.optionLabel}’(${brief(b)}) 중, 회사의 현금 여유에 더 크게 영향을 준 것은 무엇이었나요? 둘 중 하나만 다시 고를 수 있다면 어느 쪽을 바꾸겠습니까?`,
-    );
-  }
-  const focusIdx = rc ? rc.card.index : idxs[0];
-  if (focusIdx !== undefined) {
-    const d = ds[focusIdx];
-    qs.push(
-      `${when(d.month)} ${withJosa(`‘${d.optionLabel}’`, '을/를')} 고른 직후에는 ${withJosa(brief(d), '이/가')} 반영됐고, 이후 ${d.monthsElapsed}개월 동안 ${withJosa(afterBrief(d), "으로/로")} 바뀌었습니다. 이 변화 가운데 이 선택 때문인 부분과 시간이 흐르며 생긴 부분은 무엇인가요?`,
-    );
-  }
-  if (qs.length < 2 && ds.length > 0) {
-    const d = ds[ds.length - 1];
-    qs.push(`마지막 결정 ‘${d.optionLabel}’ 이후 현금이 ${money(d.before.cash)}에서 ${withJosa(money(d.afterPeriod.cash), '이/가')} 되었습니다. 이 결정 대신 다른 대안을 골랐다면 어떤 숫자가 가장 달라졌을까요?`);
-  }
-  return qs.slice(0, 2);
-}
-
 
 // ---------- 결정 직후 피드백(기간 결과는 아직 발생하지 않았다) ----------
 export interface FeedbackView {

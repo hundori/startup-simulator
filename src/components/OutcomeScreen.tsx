@@ -52,7 +52,7 @@ export default function OutcomeScreen({ game, onContinue }: { game: Game; onCont
 
       {bankrupt ? (
         <Callout tone="danger" role="alert" title="회사가 파산했습니다">
-          현금이 오래 마이너스였거나 감당할 수 없는 수준까지 내려가 운영을 이어 갈 수 없습니다. 이후 이벤트는 건너뛰고 학습 보고서로 넘어갑니다.
+          월말 정산 후 현금이 처음으로 0원 이하가 되어 운영을 이어 갈 수 없습니다(유예 기간 없음). 이후 이벤트는 건너뛰고 결과보고서로 넘어갑니다.
         </Callout>
       ) : null}
 
@@ -86,7 +86,7 @@ export default function OutcomeScreen({ game, onContinue }: { game: Game; onCont
       </section>
 
       <Button onClick={onContinue} className="w-full sm:w-auto">
-        {bankrupt || last ? '학습 보고서 보기' : '다음 이벤트로'}
+        {bankrupt || last ? '결과보고서 보기' : '다음 이벤트로'}
       </Button>
     </article>
   );

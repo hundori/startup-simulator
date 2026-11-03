@@ -312,7 +312,6 @@ export default function StatusPanel({ game, previewCost = null }: { game: Game; 
           </p>
           <div className="flex flex-wrap gap-1.5 pt-1">
             {util > 1 ? <Badge tone="warn">인력 부족</Badge> : null}
-            {sim.cash < 0 ? <Badge tone="danger">현금 마이너스 {sim.insolvencyMonths}개월째 · 2개월 연속이면 파산</Badge> : null}
             {sim.debt > 0 ? <Badge tone="neutral">부채 {formatMoney(sim.debt)}</Badge> : null}
             {sim.dilution > 0 ? <Badge tone="neutral">지분 희석 {sim.dilution}%</Badge> : null}
           </div>

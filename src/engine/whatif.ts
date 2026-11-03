@@ -25,6 +25,7 @@ export interface PeriodOutcome {
   periodNetCash: number;
   end: StateMetrics;
   months: number;
+  bankrupt: boolean; // 이 기간 안에 월말 현금이 0원 이하가 되어 파산했는가
 }
 
 export type WhatIfResult =
@@ -71,6 +72,7 @@ function run(game: Game, d: DecisionRecord, optionId: string): PeriodOutcome | s
     periodNetCash: period.netCash,
     end: stateMetrics(period.state),
     months: period.elapsed,
+    bankrupt: period.bankrupt,
   };
 }
 

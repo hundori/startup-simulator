@@ -16,8 +16,19 @@ import { formatMoney } from './format';
 export const HIRE_SALARY = 400;
 export const MKT_REF = 300;
 export const INTEREST_RATE = 0.012;
-export const BANKRUPT_CASH_FLOOR_RATIO = 0.5;
-export const BANKRUPT_MONTHS = 2;
+/**
+ * 파산 판정(교육용 규칙): 매월 말 정산을 마친 뒤 현금 잔액이 처음으로 0원 이하가 되는 그 달에 파산한다.
+ * 유예 기간·연속 개월 조건·압류선은 없다. 정산 사이(결정 직후)에는 판정하지 않으며, 그 달 말 잔액으로만 판정한다.
+ * (이전 규칙: 2개월 연속 마이너스이거나 자본의 −50% 미만. 이전 규칙으로 저장된 기록은 그 규칙으로 끝난 그대로 둔다.)
+ */
+export const BANKRUPT_CASH_LIMIT = 0;
+export const BANKRUPTCY_RULE = {
+  when: '매월 말 정산을 마친 직후의 현금 잔액으로 판정합니다.',
+  threshold: '현금 잔액이 처음으로 0원 이하가 되는 달에 파산합니다(0원도 파산).',
+  grace: '유예 없음 — 연속 개월 조건, 압류선, 추가 기회가 없습니다.',
+  notBefore: '결정 직후(월 중)에는 판정하지 않습니다. 그 달 말 정산 결과로만 판정합니다.',
+  earlyWarning: '런웨이가 1개월 미만이면 긴급 생존 카드가 한 번 열립니다. 유예가 아니라 파산 전에 선택할 기회입니다.',
+} as const;
 // 시장 압력(교육용 가정): 시간이 지날수록 경쟁이 심해져 이탈이 늘고 고객 획득이 어려워진다.
 export const MARKET_CHURN_DRIFT = 0.0009;
 export const MARKET_ACQ_DECAY = 0.008;
@@ -228,10 +239,7 @@ export interface MonthResult {
 }
 
 export function isBankrupt(s: SimState): boolean {
-  return (
-    s.insolvencyMonths >= BANKRUPT_MONTHS ||
-    s.cash < -(s.initialCapital * BANKRUPT_CASH_FLOOR_RATIO)
-  );
+  return s.cash <= BANKRUPT_CASH_LIMIT;
 }
 
 export function advanceMonth(s: SimState): MonthResult {
@@ -276,9 +284,6 @@ export function advanceMonth(s: SimState): MonthResult {
   if (u > 1) {
     notes.push(`인력 부족: 고객 응대 가동률이 ${Math.round(u * 100)}%까지 올라 품질·사기가 떨어졌습니다.`);
   }
-  if (cash < 0) {
-    notes.push('현금이 마이너스입니다. 2개월 연속이면 파산합니다.');
-  }
 
   const next: SimState = {
     ...s,
@@ -292,7 +297,7 @@ export function advanceMonth(s: SimState): MonthResult {
     headcount,
     churnRate: clamp(s.churnRate + MARKET_CHURN_DRIFT * (s.pressure ?? 1), 0.01, 0.5),
     acqBase: Math.round(s.acqBase * (1 - MARKET_ACQ_DECAY * (s.pressure ?? 1)) * 100) / 100,
-    insolvencyMonths: cash < 0 ? s.insolvencyMonths + 1 : 0,
+    insolvencyMonths: cash <= BANKRUPT_CASH_LIMIT ? s.insolvencyMonths + 1 : 0, // 참고용(판정에는 쓰지 않음)
     revHist: [...(s.revHist ?? [s.monthlyRevenue]), revenue].slice(-7),
     cashHist: [...(s.cashHist ?? [s.cash]), cash].slice(-4),
     salaryCut: cutNow && s.salaryCut
@@ -300,13 +305,7 @@ export function advanceMonth(s: SimState): MonthResult {
       : s.salaryCut,
   };
   const bankrupt = isBankrupt(next);
-  if (bankrupt) {
-    notes.push(
-      next.cash < -(next.initialCapital * BANKRUPT_CASH_FLOOR_RATIO)
-        ? '부채가 감당 범위를 넘어 채권자가 회사를 압류했습니다. (파산)'
-        : '현금이 2개월 연속 마이너스여서 회사가 파산했습니다.',
-    );
-  }
+  if (bankrupt) notes.push(`월말 현금이 ${formatMoney(next.cash)}으로 0원 이하가 되어 회사가 파산했습니다. 유예 기간은 없습니다.`);
   if (cutDrain > 0) notes.push('급여 삭감이 길어지며 팀 사기가 떨어지고 있습니다.');
   return { state: next, notes, bankrupt, profit, parts };
 }

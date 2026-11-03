@@ -1,8 +1,7 @@
 import type { DecisionRecord, Game, ResolvedEvent, Stage } from './types';
 import { BUSINESS_TYPES, CUSTOMER_TYPES, REVENUE_MODELS } from './templates';
 import {
-  BANKRUPT_CASH_FLOOR_RATIO,
-  BANKRUPT_MONTHS,
+  BANKRUPTCY_RULE,
   INTEREST_RATE,
   MARKET_ACQ_DECAY,
   MARKET_CHURN_DRIFT,
@@ -246,8 +245,8 @@ export function explainOutcome(game: Game, d: DecisionRecord): Basis {
       },
       {
         label: '파산 판정',
-        value: `현금 ${BANKRUPT_MONTHS}개월 연속 마이너스 또는 초기 자본의 −${pct(BANKRUPT_CASH_FLOOR_RATIO)} 미만`,
-        how: '둘 중 하나라도 해당하면 회사가 문을 닫고 점수에 0.4를 곱합니다.',
+        value: '월말 현금 0원 이하가 처음 되는 달',
+        how: `${BANKRUPTCY_RULE.when} ${BANKRUPTCY_RULE.grace} ${BANKRUPTCY_RULE.notBefore} 파산하면 점수에 0.4를 곱합니다.`,
       },
     ],
   };

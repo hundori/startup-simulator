@@ -319,6 +319,14 @@ export function resolvePeriod(game: Game, now = new Date().toISOString()): Decis
   const history = [...game.history, ...run.records.map(monthRecord)];
   const end = run.state;
   const operating = run.netCash;
+  // 시장 요인 분리: 같은 시작 상태·같은 기간에서 시장 경쟁 압력만 0으로 놓고 다시 계산해 차이를 기록한다.
+  const calm = runPeriod({ ...game.sim, pressure: 0 }, run.elapsed);
+  const market = {
+    customers: end.customers - calm.state.customers,
+    cash: end.cash - calm.state.cash,
+    monthlyProfit: stateMetrics(end).monthlyProfit - stateMetrics(calm.state).monthlyProfit,
+    withoutMarketCustomers: calm.state.customers,
+  };
   const record: DecisionRecord = {
     ...draft,
     afterPeriod: snapshot(end),
@@ -344,7 +352,7 @@ export function resolvePeriod(game: Game, now = new Date().toISOString()): Decis
     trace: {
       ...traceBase,
       afterPeriod: stateMetrics(end),
-      period: { months: run.elapsed, monthly: run.monthly, totals: run.totals, netCash: operating },
+      period: { months: run.elapsed, monthly: run.monthly, totals: run.totals, netCash: operating, market },
     },
   };
   const { pending: _done, ...rest } = game;
@@ -359,6 +367,18 @@ export function resolvePeriod(game: Game, now = new Date().toISOString()): Decis
       lastOutcome: record,
       phase: 'outcome',
       status: run.bankrupt ? 'bankrupt' : 'running',
+      ...(run.bankrupt
+        ? {
+            bankruptcy: {
+              month: end.month,
+              cash: end.cash,
+              cashBefore: end.cash - (run.monthly.length ? run.monthly[run.monthly.length - 1].net : 0),
+              monthlyNet: run.monthly.length ? run.monthly[run.monthly.length - 1].net : 0,
+              decisionIndex: game.decisions.length,
+              rule: 'cash-at-or-below-zero-v2' as const,
+            },
+          }
+        : {}),
       updatedAt: now,
     },
   };
