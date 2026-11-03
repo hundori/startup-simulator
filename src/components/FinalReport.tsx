@@ -152,6 +152,11 @@ export default function FinalReport({ game, onRestart }: { game: Game; onRestart
             </tbody>
           </table>
         </div>
+        {sr.years.filter((y) => y.customerNote).map((y) => (
+          <p key={y.year} className="rounded-md border border-line bg-paper px-3 py-2 text-sm leading-relaxed">
+            <strong>{y.year}년 차 고객 수:</strong> {y.customerNote}
+          </p>
+        ))}
       </section>
 
       {sr.legacyCount > 0 ? <Callout tone="info">{sr.legacyCount}개 결정은 이전 기록이라 선택 직후 수치가 없습니다. 해당 카드에는 이후 운영 결과가 포함된 변화만 표시됩니다.</Callout> : null}

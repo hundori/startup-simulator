@@ -145,3 +145,18 @@ describe('조사 자동 조합', () => {
     expect(text).not.toMatch(/(?:만원|명)\)와 /);
   });
 });
+
+describe('연도별 고객 감소 설명', () => {
+  it('고객이 줄어든 해에는 기록된 신규·이탈 수치로 이유를 붙인다', () => {
+    for (const ch of Object.values(choosers)) {
+      const g = play({}, ch);
+      const sr = buildStudentReport(g);
+      let prev = g.history[0].customers;
+      for (const y of sr.years) {
+        if (y.customers < prev) expect(y.customerNote).toContain('줄었습니다');
+        else expect(y.customerNote).toBeNull();
+        prev = y.customers;
+      }
+    }
+  });
+});

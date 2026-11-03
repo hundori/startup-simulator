@@ -380,6 +380,8 @@ export interface YearRow {
   customers: number;
   headcount: number;
   decisionIndexes: number[];
+  /** 전년(또는 시작)보다 고객이 줄었을 때만: 기록된 신규 유입·이탈 수치로 이유를 설명한다 */
+  customerNote: string | null;
 }
 
 export interface StudentReport {
@@ -450,19 +452,26 @@ function selectKey(cands: KeyCand[], excluded: Set<number>): KeyCand[] {
 function yearRows(game: Game): YearRow[] {
   const rows: YearRow[] = [];
   const last = game.history[game.history.length - 1];
+  let prevCustomers = game.history[0].customers;
   for (const year of [1, 2, 3]) {
     const end = Math.min(year * 12, last.month);
     const h = [...game.history].reverse().find((r) => r.month <= end);
     if (!h || (year > 1 && end <= (rows[rows.length - 1]?.endMonth ?? 0))) continue;
-    rows.push({
-      year,
-      endMonth: h.month,
-      cash: h.cash,
-      revenue: h.revenue,
-      customers: h.customers,
-      headcount: h.headcount,
-      decisionIndexes: game.decisions.map((d, i) => ({ d, i })).filter(({ d }) => d.month > (year - 1) * 12 && d.month <= year * 12).map(({ i }) => i),
-    });
+    const idxs = game.decisions.map((d, i) => ({ d, i })).filter(({ d }) => d.month > (year - 1) * 12 && d.month <= year * 12).map(({ i }) => i);
+    let customerNote: string | null = null;
+    if (h.customers < prevCustomers) {
+      const withTrace = idxs.map((i) => game.decisions[i].trace).filter((t): t is NonNullable<typeof t> => !!t && t.period.months > 0);
+      const t = withTrace[withTrace.length - 1];
+      const head = `고객이 ${Math.round(prevCustomers).toLocaleString('ko-KR')}명에서 ${Math.round(h.customers).toLocaleString('ko-KR')}명으로 줄었습니다.`;
+      if (t) {
+        const lost = Math.round(t.afterPeriod.customers * t.afterPeriod.churnRate);
+        customerNote = `${head} 이 해의 마지막 결정 기간이 끝난 시점 기록으로는 한 달에 새로 오는 고객이 약 ${t.afterPeriod.newCustomers}명, 떠나는 고객이 약 ${lost}명(월 이탈률 ${(t.afterPeriod.churnRate * 100).toFixed(1)}%)입니다. 떠나는 고객이 더 많으면 고객이 줄어듭니다. 이 시뮬레이션은 시간이 갈수록 경쟁 때문에 이탈이 늘고 신규 유입이 줄도록 설정돼 있어, 품질·평판·마케팅·인력(고객 응대 여력)으로 막지 못하면 고객이 줄 수 있습니다.`;
+      } else {
+        customerNote = `${head} 이전 기록이라 신규 유입·이탈 수치가 저장돼 있지 않아 이유를 나눠 보여 줄 수 없습니다.`;
+      }
+    }
+    rows.push({ year, endMonth: h.month, cash: h.cash, revenue: h.revenue, customers: h.customers, headcount: h.headcount, decisionIndexes: idxs, customerNote });
+    prevCustomers = h.customers;
   }
   return rows;
 }

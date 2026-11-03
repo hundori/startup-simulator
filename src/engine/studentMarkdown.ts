@@ -32,6 +32,7 @@ export function summaryToMarkdown(game: Game, r: StudentReport): string {
   L.push('## D. 우리 팀 토론 질문', '', ...r.questions.map((q, i) => `${i + 1}. ${q}`), '');
   L.push('## 연도별 요약', '', '| 연도 | 말 시점 | 현금 | 월 매출 | 고객 | 인원 |', '|---|---|---|---|---|---|');
   for (const y of r.years) L.push(`| ${y.year}년 차 | ${y.endMonth}개월 | ${y.cash}만원 | ${y.revenue}만원 | ${Math.round(y.customers)}명 | ${y.headcount}명 |`);
+  for (const y of r.years) if (y.customerNote) L.push('', `- ${y.year}년 차 고객 수: ${y.customerNote}`);
   L.push('', '---', `*${DISCLAIMER_LONG}*`, '*전체 결정 기록은 별도로 내려받는 상세 기록 파일에 있습니다.*');
   return L.join('\n');
 }
