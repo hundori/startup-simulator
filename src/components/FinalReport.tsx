@@ -1,23 +1,18 @@
 'use client';
 
 import type { Game } from '@/engine';
-import AdvisorPicker from './AdvisorPicker';
 import {
   DISCLAIMER_LONG,
   buildStudentReport,
-  cardForDecision,
   explainReport,
   formatMoney,
   generateReport,
-  monthToLabel,
   reportToMarkdown,
   summaryToMarkdown,
 } from '@/engine';
 import Assumptions from './Assumptions';
 import DecisionCardView from './DecisionCardView';
-import TrendCharts from './TrendCharts';
-import WhatIf from './WhatIf';
-import { Badge, Button, Callout, VERDICT_LABEL } from './ui';
+import { Button, Callout } from './ui';
 
 function save(name: string, text: string) {
   const blob = new Blob([text], { type: 'text/markdown;charset=utf-8' });
@@ -168,148 +163,7 @@ export default function FinalReport({ game, onRestart }: { game: Game; onRestart
         <Button variant="danger" onClick={onRestart}>새 게임 시작</Button>
       </div>
 
-      {/* 상세: 전체 결정 기록 · 학습자료 · 계산 안내 (인쇄에는 포함하지 않는다) */}
-      <details className="rounded-md border border-line bg-surface print:hidden">
-        <summary className="cursor-pointer px-4 py-3 font-semibold">전체 결정 기록 · 학습자료 · 계산 안내 <span className="font-normal text-muted">(눌러서 보기)</span></summary>
-        <Details game={game} />
-      </details>
-
       <p className="text-xs text-muted">{DISCLAIMER_LONG}</p>
     </article>
-  );
-}
-
-function Details({ game }: { game: Game }) {
-  const report = generateReport(game);
-  return (
-    <div className="space-y-8 border-t border-line px-4 py-5">
-      <section className="space-y-3">
-        <h2 className="text-lg font-semibold">전체 결정 기록</h2>
-        <p className="text-sm text-muted">모든 결정의 선택 전·직후·기간 종료 수치입니다. “다른 선택이었다면?”은 저장된 기록을 바꾸지 않습니다.</p>
-        {game.decisions.map((d, i) => (
-          <div key={`${d.eventId}-${i}`} className="space-y-2">
-            <p className="text-xs text-muted">
-              {i + 1}번째 · {monthToLabel(d.month).replace(/ 시점$/, '')} 시점 · 판정 {VERDICT_LABEL[d.verdict]}
-            </p>
-            <DecisionCardView card={cardForDecision(game, i)} anchor={false} />
-            <p className="whitespace-pre-wrap text-sm text-muted">우리의 근거: {d.rationale}</p>
-            {d.dissent ? <p className="whitespace-pre-wrap text-sm text-muted">반대 의견: {d.dissent}</p> : null}
-            <WhatIf game={game} index={i} />
-          </div>
-        ))}
-      </section>
-
-      <section className="space-y-2">
-        <h2 className="text-lg font-semibold">3년 성과 추이</h2>
-        <TrendCharts history={game.history} />
-      </section>
-
-      {report.salary ? (
-        <section>
-          <h2 className="mb-1 text-lg font-semibold">무급여·급여 삭감 이력</h2>
-          <p className="text-sm">
-            삭감 상태로 보낸 기간 <span className="num">{report.salary.months}</span>개월{report.salary.active ? ' (종료 시점에도 삭감 중)' : ' (종료 전 복원됨)'} · 팀이 개인적으로 떠안은 금액 <span className="num">{formatMoney(report.salary.burden)}</span> (회사 현금에서는 차감하지 않음)
-          </p>
-          <p className="num mt-1 text-sm text-muted">현재 급여 기준 월 이익 {formatMoney(report.salary.currentProfit)} · 정상 급여를 지급한다면 월 이익 {formatMoney(report.salary.normalProfit)}</p>
-        </section>
-      ) : null}
-
-      <section>
-        <h2 className="mb-1 text-lg font-semibold">판단 성향 · 학습 기록 (회사 성과 점수와 별개)</h2>
-        <p className="num text-sm">좋음 {report.learning.verdicts.strong} · 보통 {report.learning.verdicts.ok} · 아쉬움 {report.learning.verdicts.weak}</p>
-        <p className="mt-1 text-sm text-muted">{report.learning.note}</p>
-        <p className="mt-1 text-sm text-muted">
-          결정 {report.discussion.total}건 · 평균 근거 길이 <span className="num">{report.discussion.avgLength}</span>자 · 반대 의견 기록 <span className="num">{report.discussion.withDissent}</span>건 — {report.discussion.shortLabel}
-        </p>
-      </section>
-
-      {report.turningPoints.length > 0 ? (
-        <section>
-          <h2 className="mb-2 text-lg font-semibold">전환점 후보 (규칙 기반)</h2>
-          <ul className="space-y-3">
-            {report.turningPoints.map((t) => (
-              <li key={t.kind} className="rounded-md border border-line bg-surface p-3 text-sm">
-                <p className="flex flex-wrap items-center gap-2">
-                  <Badge tone={t.kind === 'best' ? 'good' : 'warn'}>{t.kind === 'best' ? '가장 좋았던 결정' : '가장 아쉬웠던 결정'}</Badge>
-                  <span className="text-muted">판정 {VERDICT_LABEL[t.decision.verdict]}</span>
-                </p>
-                <p className="mt-1 font-semibold">{t.decision.eventTitle} — {t.decision.optionLabel}</p>
-                {t.note ? <p className="mt-1">{t.note}</p> : null}
-              </li>
-            ))}
-          </ul>
-          <ul className="mt-2 list-disc space-y-1 pl-5 text-xs text-muted">
-            {report.turningCriteria.map((c) => <li key={c}>{c}</li>)}
-          </ul>
-        </section>
-      ) : null}
-
-      {report.reasons.length > 0 ? (
-        <section>
-          <h2 className="mb-1 text-lg font-semibold">CB Insights 실패 요인 분류로 본 대응</h2>
-          <ul className="divide-y divide-line rounded-md border border-line bg-surface">
-            {report.reasons.map((r) => (
-              <li key={r.reason} className="px-4 py-3 text-sm">
-                <p className="font-semibold">{r.label}</p>
-                <p className="num text-muted">좋음 {r.strong} · 보통 {r.ok} · 아쉬움 {r.weak} — {r.titles.join(', ')}</p>
-                <p className="mt-1">{r.comment}</p>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      <AdvisorPicker game={game} />
-
-      {report.choiceInsights.length > 0 ? (
-        <section>
-          <h2 className="mb-2 text-lg font-semibold">선택별 고정비·런웨이 인사이트</h2>
-          <ul className="space-y-3">
-            {report.choiceInsights.map((i) => (
-              <li key={i.eyebrow} className="rounded-md border border-line bg-surface p-3 text-sm">
-                <p className="text-xs text-muted">{i.eyebrow}</p>
-                <p className="font-semibold">{i.title}{i.tag ? <> <Badge tone="accent">{i.tag}</Badge></> : null}</p>
-                <p className="mt-1 leading-relaxed text-muted">{i.text}</p>
-              </li>
-            ))}
-          </ul>
-        </section>
-      ) : null}
-
-      <section>
-        <h2 className="mb-2 text-lg font-semibold">이 시뮬레이션에서 읽을 수 있는 것</h2>
-        <ul className="grid gap-3 sm:grid-cols-2">
-          {report.insights.map((i) => (
-            <li key={i.title} className="rounded-md border border-line bg-surface p-3 text-sm">
-              <p className="font-semibold">{i.title}</p>
-              <p className="mt-1 leading-relaxed text-muted">{i.text}</p>
-            </li>
-          ))}
-        </ul>
-      </section>
-
-      <section>
-        <h2 className="mb-2 text-lg font-semibold">실제 창업에 가져갈 원칙</h2>
-        <ol className="space-y-3">
-          {report.principles.map((i, n) => (
-            <li key={i.title} className="flex gap-3 text-sm">
-              <span className="num mt-0.5 grid h-6 w-6 shrink-0 place-items-center rounded-full bg-ink text-xs font-bold text-white">{n + 1}</span>
-              <span><span className="block font-semibold">{i.title}</span><span className="mt-0.5 block leading-relaxed text-muted">{i.text}</span></span>
-            </li>
-          ))}
-        </ol>
-      </section>
-
-      <section>
-        <h2 className="mb-2 text-lg font-semibold">수업에서 이어서 토론할 질문</h2>
-        <ol className="list-decimal space-y-1 pl-5 text-sm">{report.questions.map((q) => <li key={q}>{q}</li>)}</ol>
-      </section>
-
-      {report.endNotes.filter((n) => n !== DISCLAIMER_LONG).length > 0 ? (
-        <Callout tone="info" title="해석할 때 유의할 점">
-          <ul className="list-disc pl-5">{report.endNotes.filter((n) => n !== DISCLAIMER_LONG).map((n) => <li key={n}>{n}</li>)}</ul>
-        </Callout>
-      ) : null}
-    </div>
   );
 }
