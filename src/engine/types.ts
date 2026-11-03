@@ -227,6 +227,75 @@ export interface MetricSnapshot {
   headcount: number;
 }
 
+/** 한 시점의 회사 상태: 화면 지표 + 같은 계산 함수로 구한 파생 지표. 모두 엔진이 그 시점에 계산한 값이다. */
+export interface StateMetrics extends MetricSnapshot {
+  fixedCost: number; // 월 고정비(인건비+운영비+마케팅+이자)
+  monthlyProfit: number; // 현재 고객·비용 기준 월 이익
+  runway: number | null; // null=흑자 구조
+  debt: number;
+  dilution: number; // 지분 희석(%)
+  newCustomers: number; // 월 신규 고객(예상)
+  churnRate: number; // 월 이탈률(보정 후)
+}
+
+/** 한 달의 영업 현금흐름 구성. net = revenue − cogs − payroll − overhead − marketing − interest */
+export interface MonthCash {
+  month: number;
+  revenue: number;
+  cogs: number;
+  payroll: number;
+  overhead: number;
+  marketing: number;
+  interest: number;
+  net: number;
+}
+
+/** 결과 판정에 쓰인 조건 한 줄(당시 회사 상태의 실제 값 포함) */
+export interface RuleCheck {
+  text: string; // 예: 현금 3,000만원 이상
+  actual: string; // 예: 당시 4,200만원
+  met: boolean;
+}
+
+export interface DecisionRules {
+  outcomeIndex: number; // 적용된 결과의 순번(0부터)
+  outcomeCount: number;
+  /** 어떤 조건에도 해당하지 않아 마지막(조건 없는) 결과가 적용됐는가 */
+  isDefault: boolean;
+  /** 이 대안은 회사 상태와 관계없이 항상 같은 판정을 받는 구조인가(상황을 분석한 평가가 아님) */
+  fixedGrade: boolean;
+  /** 적용된 결과의 조건(충족) 또는 기본 결과일 때 앞선 결과가 충족되지 못한 조건 */
+  checks: RuleCheck[];
+  /** 표준 규모(5,000만원)로 환산해 비교했는가(소액 창업) */
+  scaled: boolean;
+}
+
+/**
+ * 선택 하나를 세 시점으로 나눈 기록(버전 2). 숫자는 모두 계산 엔진이 그 시점에 기록한 값이며 보고서에서 역산하지 않는다.
+ * 현금 관계: before.cash + direct.netCash + period.netCash = afterPeriod.cash
+ */
+export interface DecisionTrace {
+  version: 2;
+  before: StateMetrics;
+  afterDirect: StateMetrics;
+  afterPeriod: StateMetrics;
+  direct: {
+    oneTimeCost: number; // 선택 즉시 나간 일회성 지출(양수)
+    inflow: number; // 선택에 따른 투자·지원금·차입 유입(양수)
+    netCash: number; // inflow − oneTimeCost
+    fixedDelta: number; // 월 고정비 변화(반복 항목)
+  };
+  period: {
+    months: number;
+    monthly: MonthCash[];
+    totals: Omit<MonthCash, 'month'>;
+    netCash: number; // 이후 운영기간 순현금 변화(영업 현금흐름 합)
+  };
+  rules: DecisionRules;
+  /** 이 선택 직전의 전체 상태. "다른 선택이었다면?" 비교를 같은 조건에서 다시 계산하는 데 쓴다. */
+  beforeSim: SimState;
+}
+
 export interface MonthRecord {
   month: number;
   cash: number;
@@ -267,6 +336,17 @@ export interface DecisionRecord {
   finStatusBefore?: 'crunch' | 'deficit' | 'surplus';
   /** 현금 변화 분해(만원). total = oneTime + inflow + operating + other */
   cashFlow?: CashFlow;
+  /** 선택 직전·직후·기간 종료를 나눈 기록. 이전 저장본에는 없다(이 경우 직접 효과를 알 수 없다). */
+  trace?: DecisionTrace;
+}
+
+/** 선택 직후(기간이 흐르기 전)까지만 끝난 결정. 기간 결과는 아직 발생하지 않았다. */
+export interface PendingDecision {
+  draft: DecisionRecord; // afterPeriod = afterImmediate(아직 시간이 흐르지 않음), monthsElapsed = 0
+  months: number; // 이후 흐를 개월 수
+  startCash: number;
+  inflow: number;
+  traceBase: Omit<DecisionTrace, 'afterPeriod' | 'period'>;
 }
 
 export interface CashFlow {
@@ -279,7 +359,7 @@ export interface CashFlow {
   detail: { revenue: number; cogs: number; payroll: number; overhead: number; marketing: number; interest: number };
 }
 
-export type Phase = 'intro' | 'event' | 'outcome' | 'finished';
+export type Phase = 'intro' | 'event' | 'feedback' | 'outcome' | 'finished';
 export type GameStatus = 'running' | 'completed' | 'bankrupt';
 
 export interface Game {
@@ -298,6 +378,8 @@ export interface Game {
   decisions: DecisionRecord[];
   history: MonthRecord[];
   lastOutcome?: DecisionRecord;
+  /** 선택 직후 피드백 단계(phase='feedback')에서만 있다. 기간 결과가 아직 계산되지 않은 결정. */
+  pending?: PendingDecision;
 }
 
 export interface Score {

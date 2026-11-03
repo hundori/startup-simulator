@@ -1,157 +1,53 @@
-import type { DecisionRecord, Game, MetricSnapshot } from '@/engine';
-import { explainOutcome, formatMoney, yearSummary, formatNumber, formatSigned, formatSignedMoney, reasonLabel } from '@/engine';
+import type { Game } from '@/engine';
+import { cardForDecision, cashBridge, formatMoney, formatSignedMoney, yearSummary } from '@/engine';
 import Assumptions from './Assumptions';
-import { Badge, Button, Callout, VERDICT_LABEL } from './ui';
+import DecisionCardView from './DecisionCardView';
+import WhatIf from './WhatIf';
+import { Button, Callout, VERDICT_LABEL } from './ui';
+import { explainOutcome } from '@/engine';
 
-const ROWS: { key: keyof MetricSnapshot; label: string; money?: boolean; count?: boolean }[] = [
-  { key: 'cash', label: '현금', money: true },
-  { key: 'monthlyRevenue', label: '월 매출', money: true },
-  { key: 'customers', label: '고객 수', count: true },
-  { key: 'quality', label: '제품 품질' },
-  { key: 'morale', label: '팀 사기' },
-  { key: 'reputation', label: '평판' },
-  { key: 'headcount', label: '인원', count: true },
-];
+const sg = (v: number) => (v === 0 ? '0만원' : formatSignedMoney(v));
 
-function fmt(row: (typeof ROWS)[number], v: number) {
-  if (row.money) return formatMoney(v);
-  if (row.count) return `${formatNumber(v)}${row.key === 'headcount' ? '명' : ''}`;
-  return String(Math.round(v));
-}
-
-function delta(row: (typeof ROWS)[number], a: number, b: number) {
-  const d = b - a;
-  if (Math.round(d) === 0 && !row.money) return { text: '변화 없음', cls: 'text-muted' };
-  const text = row.money ? formatSignedMoney(d) : formatSigned(Math.round(d));
-  return { text, cls: d > 0 ? 'text-gain' : d < 0 ? 'text-loss' : 'text-muted' };
-}
-
-function Result({ d }: { d: DecisionRecord }) {
-  const tone = d.verdict === 'strong' ? 'good' : d.verdict === 'weak' ? 'warn' : 'neutral';
+function CashBridge({ game, index }: { game: Game; index: number }) {
+  const d = game.decisions[index];
+  const t = d.trace;
+  if (!t) return null;
+  const b = cashBridge(t);
+  const p = t.period.totals;
   return (
-    <section aria-labelledby="result-h" className="space-y-3">
-      <h2 id="result-h" className="text-lg font-semibold">
-        결과
-      </h2>
-      <p className="flex flex-wrap items-center gap-2">
-        <Badge tone={tone}>{VERDICT_LABEL[d.verdict]}</Badge>
-        <Badge tone="accent">{reasonLabel(d.reason)}</Badge>
-      </p>
-      <p className="leading-relaxed">{d.outcomeText}</p>
-      <div className="overflow-x-auto rounded-md border border-line bg-surface">
-        <table className="w-full min-w-[26rem] text-sm">
-          <caption className="sr-only">결정 전후 지표 변화</caption>
-          <thead className="bg-paper text-left text-xs text-muted">
-            <tr>
-              <th scope="col" className="px-3 py-2 font-semibold">지표</th>
-              <th scope="col" className="px-3 py-2 text-right font-semibold">결정 전</th>
-              <th scope="col" className="px-3 py-2 text-right font-semibold">{d.monthsElapsed}개월 뒤</th>
-              <th scope="col" className="px-3 py-2 text-right font-semibold">변화</th>
-            </tr>
-          </thead>
-          <tbody className="divide-y divide-line">
-            {ROWS.map((r) => {
-              const a = d.before[r.key] as number;
-              const b = d.afterPeriod[r.key] as number;
-              const dl = delta(r, a, b);
-              return (
-                <tr key={r.key}>
-                  <th scope="row" className="px-3 py-2 text-left font-normal">{r.label}</th>
-                  <td className="num px-3 py-2 text-right">{fmt(r, a)}</td>
-                  <td className="num px-3 py-2 text-right">{fmt(r, b)}</td>
-                  <td className={`num px-3 py-2 text-right font-semibold ${dl.cls}`}>{dl.text}</td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-    </section>
-  );
-}
-
-function CashBreakdown({ d }: { d: DecisionRecord }) {
-  const cf = d.cashFlow;
-  if (!cf) return null;
-  const sg = (v: number) => (v === 0 ? '0' : formatSignedMoney(v));
-  const dt = cf.detail;
-  const start = d.before.cash;
-  const end = d.afterPeriod.cash;
-  const check = start + cf.oneTime + cf.inflow + cf.operating + cf.other;
-  return (
-    <section aria-labelledby="cash-h" className="space-y-2">
-      <h2 id="cash-h" className="text-lg font-semibold">왜 현금이 이만큼 변했나</h2>
-      <div className="overflow-x-auto rounded-md border border-line bg-surface">
-        <table className="w-full min-w-[26rem] text-sm">
+    <details className="rounded-md border border-line bg-surface text-sm">
+      <summary className="cursor-pointer px-4 py-3 font-semibold">현금이 왜 이렇게 변했나 <span className="font-normal text-muted">(눌러서 보기)</span></summary>
+      <div className="overflow-x-auto border-t border-line">
+        <table className="w-full min-w-[24rem]">
           <caption className="sr-only">현금 변화의 구성</caption>
           <tbody className="divide-y divide-line">
-            <tr><th scope="row" className="px-3 py-2 text-left font-normal">결정 전 현금</th><td className="num px-3 py-2 text-right">{formatMoney(start)}</td></tr>
-            <tr><th scope="row" className="px-3 py-2 text-left font-normal">① 일회성 지출 <span className="text-xs text-muted">(결정 즉시 한 번)</span></th><td className="num px-3 py-2 text-right font-semibold">{sg(cf.oneTime)}</td></tr>
-            <tr><th scope="row" className="px-3 py-2 text-left font-normal">② 투자·지원금·차입 등 자금 유입</th><td className="num px-3 py-2 text-right font-semibold">{sg(cf.inflow)}</td></tr>
-            <tr>
-              <th scope="row" className="px-3 py-2 text-left font-normal">
-                ③ 경과 {cf.months}개월의 영업 현금흐름
-                <span className="mt-0.5 block text-xs text-muted">
-                  매출 {formatMoney(dt.revenue)} − 원가 {formatMoney(dt.cogs)} − 인건비 {formatMoney(dt.payroll)} − 운영비 {formatMoney(dt.overhead)} − 마케팅 {formatMoney(dt.marketing)} − 이자 {formatMoney(dt.interest)}
-                </span>
-              </th>
-              <td className="num px-3 py-2 text-right font-semibold">{sg(cf.operating)}</td>
-            </tr>
-            <tr><th scope="row" className="px-3 py-2 text-left font-normal">④ 기타 조정</th><td className="num px-3 py-2 text-right font-semibold">{sg(cf.other)}</td></tr>
-            <tr className="bg-paper"><th scope="row" className="px-3 py-2 text-left font-semibold">{cf.months}개월 뒤 현금</th><td className="num px-3 py-2 text-right font-semibold">{formatMoney(end)}</td></tr>
+            <tr><th scope="row" className="px-3 py-2 text-left font-normal">선택 전 현금</th><td className="num px-3 py-2 text-right">{formatMoney(b.start)}</td></tr>
+            <tr><th scope="row" className="px-3 py-2 text-left font-normal">① 선택으로 바로 바뀐 현금<span className="block text-xs text-muted">일회성 지출 {formatMoney(t.direct.oneTimeCost)} 차감, 자금 유입 {formatMoney(t.direct.inflow)} 반영</span></th><td className="num px-3 py-2 text-right font-semibold">{sg(b.direct)}</td></tr>
+            <tr><th scope="row" className="px-3 py-2 text-left font-normal">② 이후 {t.period.months}개월 영업 현금흐름<span className="block text-xs text-muted">매출 {formatMoney(p.revenue)} − 원가 {formatMoney(p.cogs)} − 인건비 {formatMoney(p.payroll)} − 운영비 {formatMoney(p.overhead)} − 마케팅 {formatMoney(p.marketing)} − 이자 {formatMoney(p.interest)}</span></th><td className="num px-3 py-2 text-right font-semibold">{sg(b.period)}</td></tr>
+            <tr className="bg-paper"><th scope="row" className="px-3 py-2 text-left font-semibold">기간 종료 현금</th><td className="num px-3 py-2 text-right font-semibold">{formatMoney(b.end)}</td></tr>
           </tbody>
         </table>
+        <p className="num border-t border-line px-3 py-2 text-xs text-muted">검산: {formatMoney(b.start)} {sg(b.direct)} {sg(b.period)} = {formatMoney(b.start + b.direct + b.period)} {b.matches ? '(실제 현금과 일치)' : '(차이 있음)'}. 일회성 지출은 ①에만 들어 있고 ②에는 다시 들어가지 않습니다.</p>
       </div>
-      <p className="num text-xs text-muted">
-        검산: {formatMoney(start)} {sg(cf.oneTime)} {sg(cf.inflow)} {sg(cf.operating)} {sg(cf.other)} = {formatMoney(check)} {check === end ? '(실제 현금과 일치)' : '(실제 현금과 차이가 있습니다)'}.
-        금액은 만원 단위 정수로 계산해 반올림 차이가 없고, 기타 조정은 위 세 항목으로 설명되지 않는 나머지입니다{cf.other === 0 ? '(이번에는 0)' : ''}.
-      </p>
-    </section>
-  );
-}
-
-function YearEndSummary({ game }: { game: Game }) {
-  const y = yearSummary(game);
-  return (
-    <section aria-labelledby="year-h" className="space-y-3 rounded-md border border-line border-l-[3px] border-l-brass bg-surface p-4">
-      <h2 id="year-h" className="text-lg font-semibold">{y.title}</h2>
-      <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
-        {y.rows.map((r) => (
-          <div key={r.label}>
-            <dt className="text-xs text-muted">{r.label}</dt>
-            <dd className="num font-semibold">{r.value}</dd>
-          </div>
-        ))}
-      </dl>
-      <div className="grid gap-4 text-sm sm:grid-cols-2">
-        <div>
-          <p className="font-semibold">핵심 위험</p>
-          <ul className="mt-1 list-disc space-y-1 pl-5 text-muted">{y.risks.map((r) => <li key={r}>{r}</li>)}</ul>
-        </div>
-        <div>
-          <p className="font-semibold">다음 검증 과제</p>
-          <ul className="mt-1 list-disc space-y-1 pl-5 text-muted">{y.checks.map((r) => <li key={r}>{r}</li>)}</ul>
-        </div>
-      </div>
-    </section>
+    </details>
   );
 }
 
 export default function OutcomeScreen({ game, onContinue }: { game: Game; onContinue: () => void }) {
   const d = game.lastOutcome;
   if (!d) return null;
+  const index = game.decisions.length - 1;
   const bankrupt = game.status === 'bankrupt';
   const last = game.stage === 3 && game.planIndex + 1 >= game.plan.length;
+  const card = cardForDecision(game, index);
+  const y = game.planIndex + 1 >= game.plan.length ? yearSummary(game) : null;
 
   return (
-    <article className="max-w-2xl space-y-6">
+    <article className="max-w-2xl space-y-5">
       <header>
-        <p className="text-sm text-muted">결정 결과</p>
+        <p className="text-sm text-muted">시간이 흐른 뒤의 결과</p>
         <h1 className="mt-1 text-2xl font-bold leading-tight sm:text-3xl">{d.eventTitle}</h1>
-        <p className="mt-2 text-sm">
-          선택: <strong>{d.optionLabel}</strong>
-          {d.cost > 0 ? <span className="num text-muted"> · 비용 {formatMoney(d.cost)}</span> : null}
-        </p>
+        <p className="mt-2 text-sm">판정: <strong>{VERDICT_LABEL[d.verdict]}</strong></p>
       </header>
 
       {bankrupt ? (
@@ -160,23 +56,29 @@ export default function OutcomeScreen({ game, onContinue }: { game: Game; onCont
         </Callout>
       ) : null}
 
-      <Result d={d} />
+      <DecisionCardView card={card} />
 
-      <CashBreakdown d={d} />
+      <CashBridge game={game} index={index} />
+      <WhatIf game={game} index={index} />
 
-      {game.planIndex + 1 >= game.plan.length ? <YearEndSummary game={game} /> : null}
-
-      <Assumptions basis={explainOutcome(game, d)} />
+      {y ? (
+        <section aria-labelledby="year-h" className="space-y-2 rounded-md border border-line border-l-[3px] border-l-brass bg-surface p-4">
+          <h2 id="year-h" className="text-lg font-semibold">{y.title}</h2>
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm sm:grid-cols-3">
+            {y.rows.map((r) => (
+              <div key={r.label}><dt className="text-xs text-muted">{r.label}</dt><dd className="num font-semibold">{r.value}</dd></div>
+            ))}
+          </dl>
+        </section>
+      ) : null}
 
       {d.notes.length > 0 ? (
         <Callout tone="warn" title="운영 상황 알림">
-          <ul className="list-disc pl-5">
-            {d.notes.map((n) => (
-              <li key={n}>{n}</li>
-            ))}
-          </ul>
+          <ul className="list-disc pl-5">{d.notes.map((n) => <li key={n}>{n}</li>)}</ul>
         </Callout>
       ) : null}
+
+      <Assumptions basis={explainOutcome(game, d)} />
 
       <section>
         <h2 className="mb-1 text-sm font-semibold">우리가 남긴 근거</h2>

@@ -777,7 +777,7 @@ describe('L. 시나리오 정합성·재무 모델·최종 평가 (사용자 점
       expect(r.score.total).toBeGreaterThanOrEqual(0);
       const md = reportToMarkdown(g, r);
       expect(md).toContain('제시된 선택지');
-      expect(md).toContain('현금 변화 분해');
+      expect(md).toContain('현금 검산');
       expect(md).toContain('학습·의사결정 기록');
     }
   });

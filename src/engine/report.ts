@@ -6,6 +6,8 @@ import { formatMoney, monthToLabel } from './format';
 import { BUSINESS_TYPES, CUSTOMER_TYPES, REVENUE_MODELS } from './templates';
 import { scoreGame } from './scoring';
 import { withJosa } from './josa';
+import { cashBridge, explainRules } from './trace';
+import { LEGACY_NOTICE } from './studentReport';
 import { createInitialState } from './templates';
 import { isSalaryCut, monthlyFixedCost, normalSalaryProfit, projectedMonthlyProfit, salaryGapPerMonth, unitEconomics, aiAutomated } from './rules';
 import { EMERGENCY_EVENT_ID, SALARY_EVENT_ID } from './events';
@@ -110,10 +112,10 @@ const QUESTION_BY_PART: Record<keyof Score['parts'], string[]> = {
 export const PRINCIPLES: Insight[] = [
   {
     title: '일회성 비용과 월 고정비는 완전히 다른 돈입니다',
-    text: '외주비 300만원은 한 번 나가고 끝나지만, 월 250만원짜리 채용이나 구독은 12개월이면 3,000만원이 됩니다. 같은 "비용"이어도 런웨이를 줄이는 속도가 다릅니다. 결정 전에 "이 돈은 한 번인가, 매달인가"를 먼저 물어야 합니다.',
+    text: '외주비 300만원은 한 번 나가고 끝나지만, 월 250만원짜리 채용이나 구독은 같은 비용이 12개월 유지될 경우 3,000만원이 됩니다. 같은 "비용"이어도 런웨이를 줄이는 속도가 다릅니다. 결정 전에 "이 돈은 한 번인가, 매달인가"를 먼저 물어야 합니다.',
   },
   {
-    title: '런웨이는 현금이 아니라 속도의 문제입니다',
+    title: '런웨이는 현금이 아니라 속도의 문제입니다(현재 속도로 현금이 소진될 때까지 남은 기간)',
     text: '현금이 1억원이어도 매달 2,000만원씩 새면 5개월입니다. 매출이 늘어도 고정비가 더 빨리 늘면 런웨이는 오히려 짧아집니다. 투자는 시간을 사는 것이지 문제를 해결하는 것이 아닙니다.',
   },
   {
@@ -171,7 +173,7 @@ function buildChoiceInsights(game: Game): Insight[] {
     const delta = up.fixedAfter - up.fixedBefore;
     add(
       up,
-      `${head(up)} 월 고정비가 ${signed(delta)} 늘었고(${formatMoney(up.fixedBefore)}→${formatMoney(up.fixedAfter)}), ${runwayChange(up)}. 이 증가분은 1년이면 ${withJosa(formatMoney(delta * 12), '이/가')} 됩니다${up.cost > 0 ? `. 같은 결정의 일회성 비용 ${formatMoney(up.cost)}보다 훨씬 오래 부담이 이어집니다` : ''}. 이 고정비를 매출이 따라잡았는지 확인해 보세요.`,
+      `${head(up)} 월 고정비가 ${signed(delta)} 늘었고(${formatMoney(up.fixedBefore)}→${formatMoney(up.fixedAfter)}), ${runwayChange(up)}. 같은 비용이 12개월 유지될 경우 ${withJosa(formatMoney(delta * 12), '이/가')} 더 나갑니다${up.cost > 0 ? `. 같은 결정의 일회성 비용 ${formatMoney(up.cost)}보다 훨씬 오래 부담이 이어집니다` : ''}. 이 고정비를 매출이 따라잡았는지 확인해 보세요.`,
       `월 고정비 ${signed(delta)}`,
     );
   }
@@ -454,6 +456,21 @@ export function generateReport(game: Game): Report {
   return { score, headline, summary, turningPoints, turningCriteria, salary, learning, reasons, discussion, choiceInsights, insights, principles: PRINCIPLES, questions, endNotes };
 }
 
+function traceLines(d: DecisionRecord): string[] {
+  const t = d.trace;
+  if (!t) return [`- 참고: ${LEGACY_NOTICE}`];
+  const m = (x: typeof t.before) => `현금 ${formatMoney(x.cash)}, 월 고정비 ${formatMoney(x.fixedCost)}, 월 이익 ${formatMoney(x.monthlyProfit)}, 고객 ${x.customers}, 품질 ${x.quality}, 사기 ${x.morale}, 평판 ${x.reputation}`;
+  const b = cashBridge(t);
+  return [
+    `- 선택 전: ${m(t.before)}`,
+    `- 선택 직후: ${m(t.afterDirect)} (일회성 지출 ${formatMoney(t.direct.oneTimeCost)}, 자금 유입 ${formatMoney(t.direct.inflow)}, 월 고정비 변화 ${formatMoney(t.direct.fixedDelta)})`,
+    `- 기간 종료(${t.period.months}개월 뒤): ${m(t.afterPeriod)}`,
+    `- 이후 영업 현금흐름: 매출 ${formatMoney(t.period.totals.revenue)} − 원가 ${formatMoney(t.period.totals.cogs)} − 인건비 ${formatMoney(t.period.totals.payroll)} − 운영비 ${formatMoney(t.period.totals.overhead)} − 마케팅 ${formatMoney(t.period.totals.marketing)} − 이자 ${formatMoney(t.period.totals.interest)} = ${formatMoney(t.period.netCash)}`,
+    `- 현금 검산: ${formatMoney(b.start)} + 선택 직접 ${formatMoney(b.direct)} + 이후 영업 ${formatMoney(b.period)} = ${formatMoney(b.end)} (${b.matches ? '일치' : '불일치'})`,
+    t.rules.fixedGrade ? `- 판정: 회사 상태와 무관하게 정해진 교육용 값` : `- 판정 규칙: ${explainRules(t.rules)}`,
+  ];
+}
+
 export function reportToMarkdown(game: Game, report: Report): string {
   const lines: string[] = [];
   lines.push(`# ${game.setup.companyName} — Startup Simulator 학습 보고서`, '');
@@ -466,10 +483,7 @@ export function reportToMarkdown(game: Game, report: Report): string {
     `종합 ${report.score.total}점 (${report.score.grade}) — 재무 ${report.score.parts.finance}, 성장 ${report.score.parts.growth}, 품질 ${report.score.parts.quality}, 팀 ${report.score.parts.team}, 평판 ${report.score.parts.reputation}`,
     '',
   );
-  lines.push(
-    `> 성장 점수 산식 변경: 이전 산식(월 매출 ÷ 초기 자본의 15%)이면 성장 ${report.score.legacy.growth}점, 종합 ${report.score.legacy.total}점. 현재는 매출의 비용 충당률과 매출 규모로 계산합니다. 이 점수는 회사 성과이며 학습·의사결정 평가와 별개입니다.`,
-    '',
-  );
+  lines.push('> 이 점수는 회사 성과이며 학습·의사결정 평가와 별개입니다. 계산 방식은 앱의 “계산 방식 보기”에 있습니다.', '');
   if (report.turningPoints.length) {
     lines.push('## 주요 전환점', '');
     for (const t of report.turningPoints) {
@@ -514,7 +528,6 @@ export function reportToMarkdown(game: Game, report: Report): string {
   lines.push('', '## 의사결정 기록', '');
   game.decisions.forEach((d, i) => {
     const snap = (s: DecisionRecord['before']) => `현금 ${formatMoney(s.cash)}, 월 매출 ${formatMoney(s.monthlyRevenue)}, 고객 ${s.customers}, 품질 ${s.quality}, 사기 ${s.morale}, 평판 ${s.reputation}, 인원 ${s.headcount}`;
-    const cf = d.cashFlow;
     const block = [
       `### ${i + 1}. ${d.eventTitle} (${monthToLabel(d.month)})`,
       '',
@@ -529,14 +542,12 @@ export function reportToMarkdown(game: Game, report: Report): string {
       d.dissent ? `- 반대 의견·검토한 대안: ${d.dissent}` : '- 반대 의견: (기록 없음)',
       `- 결과: ${d.outcomeText}`,
       `- 지표 변화: 결정 전 [${snap(d.before)}] → 기간 종료 [${snap(d.afterPeriod)}] (${d.monthsElapsed}개월)`,
-      cf
-        ? `- 현금 변화 분해: 일회성 ${formatMoney(cf.oneTime)} + 자금 유입 ${formatMoney(cf.inflow)} + 영업 현금흐름 ${formatMoney(cf.operating)} + 기타 ${formatMoney(cf.other)} = ${formatMoney(cf.total)}`
-        : '',
+      ...traceLines(d),
       '',
     ];
     lines.push(...block.filter((l, k) => l !== '' || k === block.length - 1 || k === 1));
   });
   lines.push('## 다음 토론 질문', '', ...report.questions.map((q) => `- ${q}`), '');
-  lines.push('---', '', ...report.endNotes.map((n) => `*${n}*`));
+  lines.push('---', '', ...report.endNotes.filter((n) => n !== DISCLAIMER_LONG).map((n) => `*${n}*`), `*${DISCLAIMER_LONG}*`);
   return lines.join('\n');
 }

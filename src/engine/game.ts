@@ -4,9 +4,12 @@ import type {
   DecisionRecord,
   EventOption,
   Game,
+  Outcome,
+  PendingDecision,
   PublicOption,
   ResolvedEvent,
   SetupInput,
+  SimState,
   Stage,
 } from './types';
 import { MIN_RATIONALE_LENGTH } from './constants';
@@ -16,7 +19,6 @@ import { fillText, shortIdea, shortTarget } from './josa';
 import { revenueStructure } from './structure';
 import { formatMoney } from './format';
 import {
-  advanceMonth,
   applyEffects,
   scaleMoney,
   computeRunway,
@@ -35,6 +37,7 @@ import {
   snapshot,
 } from './rules';
 import { planStageEvents } from './scheduler';
+import { describeRules, runPeriod, stateMetrics } from './trace';
 import { createInitialState } from './templates';
 
 export interface CreateOptions {
@@ -132,7 +135,7 @@ function factsOf(game: Game): string[] {
   return facts;
 }
 
-function visibleOptions(game: Game, options: EventOption[]): EventOption[] {
+export function visibleOptions(game: Pick<Game, 'setup' | 'sim'>, options: EventOption[]): EventOption[] {
   const model = game.setup.revenueModel;
   return options.filter(
     (o) =>
@@ -206,7 +209,36 @@ export function resolveEvent(game: Game): ResolvedEvent | null {
 
 export type DecisionResult = { ok: true; game: Game } | { ok: false; error: string };
 
-export function submitDecision(
+/** 선택의 직접 효과만 적용한다(시간은 흐르지 않는다). 일회성 비용·효과·급여 복원 표시를 한 번에 처리한다. */
+export function applyDirect(
+  sim: SimState,
+  option: EventOption,
+  eventId: string,
+): { cost: number; outcome: Outcome; afterDirect: SimState; inflow: number } {
+  const cost = scaleMoney(sim, option.cost ?? 0);
+  const outcome = pickOutcome(sim, option);
+  const startCash = sim.cash;
+  let next: SimState = { ...sim, cash: sim.cash - cost };
+  next = applyEffects(next, outcome.effects);
+  // 급여 복원 결정을 한 번 물었다는 표시
+  if (eventId === SALARY_EVENT_ID && next.salaryCut) next = { ...next, salaryCut: { ...next.salaryCut, asks: next.salaryCut.asks + 1 } };
+  return { cost, outcome, afterDirect: next, inflow: next.cash - (startCash - cost) };
+}
+
+/** 이 이벤트가 결정 뒤 흘려 보내는 개월 수. 긴급 카드·급여 복원 같은 추가 결정은 0. */
+function periodMonths(game: Game, eventId: string): number {
+  if (isExtra(eventId)) return 0;
+  const realPlan = game.plan.filter((p) => !isExtra(p));
+  const realIndex = game.plan.slice(0, game.planIndex).filter((p) => !isExtra(p)).length;
+  return monthsAllocation(realPlan.length)[realIndex] ?? 12;
+}
+
+/**
+ * 1단계: 선택의 직접 효과(일회성 지출·자금 유입·고정비·품질 등 즉시 변화)만 적용한다.
+ * 이후 기간의 운영 결과는 아직 계산하지 않으며(phase='feedback'), resolvePeriod가 이어서 계산한다.
+ * 시간이 흐르지 않는 추가 결정(긴급 카드·급여 복원)은 바로 이어서 끝낸다.
+ */
+export function beginDecision(
   game: Game,
   optionId: string,
   rationale: string,
@@ -226,48 +258,20 @@ export function submitDecision(
   if (!check.available) return { ok: false, error: check.reasons.join(' / ') };
 
   const before = snapshot(game.sim);
-  const cost = scaleMoney(game.sim, option.cost ?? 0);
-  const outcome = pickOutcome(game.sim, option);
-
-  const startCash = game.sim.cash;
-  let sim = { ...game.sim, cash: game.sim.cash - cost };
-  sim = applyEffects(sim, outcome.effects);
-  // 급여 복원 결정을 한 번 물었다는 표시
-  if (ev.id === SALARY_EVENT_ID && sim.salaryCut) sim = { ...sim, salaryCut: { ...sim.salaryCut, asks: sim.salaryCut.asks + 1 } };
-  const afterImmediate = snapshot(sim);
-  const inflow = sim.cash - (startCash - cost);
+  const beforeM = stateMetrics(game.sim);
+  const rules = describeRules(game.sim, option);
+  const { cost, outcome, afterDirect, inflow } = applyDirect(game.sim, option, ev.id);
+  const afterImmediate = snapshot(afterDirect);
+  const afterDirectM = stateMetrics(afterDirect);
   const fixedBefore = monthlyFixedCost(game.sim);
-  const fixedAfter = monthlyFixedCost(sim);
-  const runwayBefore = computeRunway(game.sim);
-
-  // 긴급 생존 카드는 시간을 흘리지 않고 즉시 적용하며, 연차의 개월 배분에는 들어가지 않는다.
+  const fixedAfter = monthlyFixedCost(afterDirect);
+  const variant = ev.variants?.find((v) => evalConds(game.sim, v.when));
+  const months = periodMonths(game, ev.id);
   const isFollowup = isExtra(ev.id);
-  const realPlan = game.plan.filter((p) => !isExtra(p));
-  const realIndex = game.plan.slice(0, game.planIndex).filter((p) => !isExtra(p)).length;
-  const months = isFollowup ? 0 : (monthsAllocation(realPlan.length)[realIndex] ?? 12);
-  const detail = { revenue: 0, cogs: 0, payroll: 0, overhead: 0, marketing: 0, interest: 0 };
-  let operating = 0;
-  const history = [...game.history];
-  const notes: string[] = [];
-  let bankrupt = false;
-  let elapsed = 0;
-  for (let i = 0; i < months; i++) {
-    const r = advanceMonth(sim);
-    sim = r.state;
-    operating += r.profit;
-    for (const k of Object.keys(detail) as (keyof typeof detail)[]) detail[k] += r.parts[k];
-    elapsed += 1;
-    history.push(monthRecord(sim));
-    for (const n of r.notes) if (!notes.includes(n)) notes.push(n);
-    if (r.bankrupt) {
-      bankrupt = true;
-      break;
-    }
-  }
 
-  const record: DecisionRecord = {
+  const draft: DecisionRecord = {
     eventId: ev.id,
-    eventTitle: ev.variants?.find((v) => evalConds(game.sim, v.when))?.title ?? ev.title,
+    eventTitle: variant?.title ?? ev.title,
     optionId: option.id,
     optionLabel: fill(option.label, game),
     stage: isFollowup ? game.stage : ev.stage,
@@ -276,50 +280,101 @@ export function submitDecision(
     dissent: dissent.trim(),
     before,
     afterImmediate,
-    afterPeriod: snapshot(sim),
-    monthsElapsed: elapsed,
+    afterPeriod: afterImmediate,
+    monthsElapsed: 0,
     outcomeText: fill(outcome.text, game),
     verdict: outcome.verdict,
     reason: ev.reason,
     cost,
     fixedBefore,
     fixedAfter,
-    runwayBefore,
-    runwayAfter: computeRunway(sim),
-    notes,
-    situation: fill(
-      ev.variants?.find((v) => evalConds(game.sim, v.when))?.situation ?? ev.situation,
-      game,
-    ),
+    runwayBefore: computeRunway(game.sim),
+    runwayAfter: computeRunway(afterDirect),
+    notes: [],
+    situation: fill(variant?.situation ?? ev.situation, game),
     optionsShown: visibleOptions(game, ev.options).map((o) => {
       const pub = toPublicOption(game, o);
       return { label: pub.label, cost: pub.cost, fixedMin: pub.fixedDelta.min, fixedMax: pub.fixedDelta.max, available: pub.available, reasons: pub.reasons };
     }),
     finStatusBefore: financialStatus(game.sim),
+  };
+  const traceBase: PendingDecision['traceBase'] = {
+    version: 2,
+    before: beforeM,
+    afterDirect: afterDirectM,
+    direct: { oneTimeCost: cost, inflow, netCash: afterDirect.cash - game.sim.cash, fixedDelta: fixedAfter - fixedBefore },
+    rules,
+    beforeSim: game.sim,
+  };
+  const pending: PendingDecision = { draft, months, startCash: game.sim.cash, inflow, traceBase };
+  const staged: Game = { ...game, sim: afterDirect, phase: 'feedback', pending, updatedAt: now };
+  return months === 0 ? resolvePeriod(staged, now) : { ok: true, game: staged };
+}
+
+/** 2단계: 직접 효과가 적용된 상태에서 이후 개월 수만큼 운영을 계산하고, 결정 기록을 완성한다. */
+export function resolvePeriod(game: Game, now = new Date().toISOString()): DecisionResult {
+  if (game.phase !== 'feedback' || !game.pending) return { ok: false, error: '기간 결과를 계산할 결정이 없습니다.' };
+  const { draft, months, startCash, inflow, traceBase } = game.pending;
+  const run = runPeriod(game.sim, months);
+  const history = [...game.history, ...run.records.map(monthRecord)];
+  const end = run.state;
+  const operating = run.netCash;
+  const record: DecisionRecord = {
+    ...draft,
+    afterPeriod: snapshot(end),
+    monthsElapsed: run.elapsed,
+    runwayAfter: computeRunway(end),
+    notes: run.notes,
     cashFlow: {
-      oneTime: cost === 0 ? 0 : -cost,
+      oneTime: draft.cost === 0 ? 0 : -draft.cost,
       inflow,
       operating,
-      other: sim.cash - startCash - (-cost + inflow + operating),
-      total: sim.cash - startCash,
-      months: elapsed,
-      detail,
+      other: end.cash - startCash - (-draft.cost + inflow + operating),
+      total: end.cash - startCash,
+      months: run.elapsed,
+      detail: {
+        revenue: run.totals.revenue,
+        cogs: run.totals.cogs,
+        payroll: run.totals.payroll,
+        overhead: run.totals.overhead,
+        marketing: run.totals.marketing,
+        interest: run.totals.interest,
+      },
+    },
+    trace: {
+      ...traceBase,
+      afterPeriod: stateMetrics(end),
+      period: { months: run.elapsed, monthly: run.monthly, totals: run.totals, netCash: operating },
     },
   };
-
+  const { pending: _done, ...rest } = game;
+  void _done;
   return {
     ok: true,
     game: {
-      ...game,
-      sim,
+      ...rest,
+      sim: end,
       history,
       decisions: [...game.decisions, record],
       lastOutcome: record,
       phase: 'outcome',
-      status: bankrupt ? 'bankrupt' : 'running',
+      status: run.bankrupt ? 'bankrupt' : 'running',
       updatedAt: now,
     },
   };
+}
+
+/** 한 번에 끝까지 진행(테스트·자동 진행용). 화면은 beginDecision → resolvePeriod를 나눠 쓴다. */
+export function submitDecision(
+  game: Game,
+  optionId: string,
+  rationale: string,
+  dissent = '',
+  now = new Date().toISOString(),
+): DecisionResult {
+  const first = beginDecision(game, optionId, rationale, dissent, now);
+  if (!first.ok || first.game.phase !== 'feedback') return first;
+  return resolvePeriod(first.game, now);
 }
 
 /** 다음 이벤트·연차로 넘어간다(긴급 카드 삽입 전) */

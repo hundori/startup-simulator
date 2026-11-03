@@ -7,11 +7,13 @@ import {
   beginSimulation,
   continueFromOutcome,
   createGame,
+  beginDecision,
   resolveEvent,
-  submitDecision,
+  resolvePeriod,
 } from '@/engine';
 import { LocalStorageAdapter } from '@/storage/local';
 import ConfirmDialog from './ConfirmDialog';
+import FeedbackScreen from './FeedbackScreen';
 import EventScreen, { clearDraft } from './EventScreen';
 import FinalReport from './FinalReport';
 import HistoryPanel from './HistoryPanel';
@@ -94,7 +96,7 @@ export default function GameApp() {
 
   const onSubmit = (optionId: string, rationale: string, dissent: string): string | null => {
     if (!game) return '게임 상태를 찾을 수 없습니다.';
-    const res = submitDecision(game, optionId, rationale, dissent);
+    const res = beginDecision(game, optionId, rationale, dissent);
     if (!res.ok) return res.error;
     clearDraft(game.id, game.plan[game.planIndex]);
     commit(res.game);
@@ -115,6 +117,17 @@ export default function GameApp() {
     body = <IntroScreen game={game} onBegin={() => commit(beginSimulation(game))} />;
   } else if (game.phase === 'event' && event) {
     body = <EventScreen key={`${game.id}:${event.id}`} game={game} event={event} onSubmit={onSubmit} onPreview={setPreviewCost} />;
+  } else if (game.phase === 'feedback') {
+    body = (
+      <FeedbackScreen
+        game={game}
+        onContinue={() => {
+          const r = resolvePeriod(game);
+          if (r.ok) commit(r.game);
+          window.scrollTo({ top: 0 });
+        }}
+      />
+    );
   } else if (game.phase === 'outcome') {
     body = (
       <OutcomeScreen
@@ -199,7 +212,7 @@ export default function GameApp() {
         )}
       </main>
 
-      <footer className="mx-auto max-w-6xl border-t border-line px-4 py-6 text-xs text-muted sm:px-6">{DISCLAIMER_SHORT}</footer>
+      <footer className={`mx-auto max-w-6xl border-t border-line px-4 py-6 text-xs text-muted sm:px-6 ${game?.phase === 'finished' ? 'hidden' : ''}`}>{DISCLAIMER_SHORT}</footer>
 
       {showHistory && game ? <HistoryPanel decisions={game.decisions} onClose={() => setShowHistory(false)} /> : null}
       {confirmReset ? (

@@ -34,6 +34,7 @@ function Runway({ game }: { game: Game }) {
   return (
     <span className={`num font-semibold ${tone}`}>
       런웨이 {r < 1 ? '1개월 미만' : `약 ${r.toFixed(1)}개월`}
+      <span className="block text-xs font-normal text-muted">현재 속도로 현금이 소진될 때까지 남은 기간</span>
     </span>
   );
 }

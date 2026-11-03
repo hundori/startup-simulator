@@ -34,7 +34,7 @@ export default function IntroScreen({ game, onBegin }: { game: Game; onBegin: ()
     ['월 이탈률(기본)', `${(sim.churnRate * 100).toFixed(1)}%`],
     ['사내 업무 자동화 가능 비율(상한)', `${Math.round((sim.aiShare ?? 0.3) * 100)}% · 응대·문서 같은 운영 업무 기준이며, 제품 자체의 AI 기능(예: AI 추천)과는 별개입니다`],
     ['처리 가능한 고객 수', `${formatNumber(sim.headcount * sim.capPerHead)}명 (현재 가동률 ${Math.round(utilization(sim) * 100)}%)`],
-    ['시작 런웨이', runway === null ? '흑자 구조' : `약 ${runway.toFixed(1)}개월 (지금 속도로 쓸 때)`],
+    ['시작 런웨이', runway === null ? '흑자 구조' : `약 ${runway.toFixed(1)}개월 (현재 속도로 현금이 소진될 때까지 남은 기간)`],
   ];
 
   return (
